@@ -170,7 +170,7 @@ describe('the dance mode, through the whole program', () => {
     const r = await rig(danceRig())
     const stage = await r.connect({ danceMs: 5000 })
     await until(() => r.app.stage.hub.connected)
-    const views = r.app.modeViews()
+    const views = r.app.modeViews().filter((v) => v.id === 'dance') // other packs live in the same folder
     expect(views.map((v) => v.id)).toEqual(['dance'])
     expect(views[0]).toMatchObject({ state: 'IDLE' })
 
@@ -248,7 +248,7 @@ describe('the dance mode, through the whole program', () => {
     expect(systemText(r.llm.requests[0]!)).not.toContain('motion:dance')
     expect(systemText(r.llm.requests[0]!)).not.toContain('about to dance')
     expect(stage.dances).toEqual([])
-    expect(r.app.modeViews()[0]?.admission?.reasons[0]).toContain(
+    expect(r.app.modeViews().find((m) => m.id === 'dance')?.admission?.reasons[0]).toContain(
       'switched off in the configuration'
     )
     await expect(r.app.modeAction('dance', 'enter', NO_FLAGS)).rejects.toMatchObject({
