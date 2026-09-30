@@ -296,7 +296,7 @@ describe('which game this is', () => {
     await r.tick(8000)
     expect(r.llm('commentary-analyze')).toHaveLength(1)
     expect(r.llm('commentary-identify')).toHaveLength(3)
-    expect(r.prompt()).toContain('the streamer is playing Some Game')
+    expect(r.prompt()).toContain('the game or program on the screen is Some Game')
   })
 
   it('asks again after fifteen minutes, and keeps what it knows when the new answer is no better', async () => {
@@ -369,7 +369,7 @@ describe('which game this is', () => {
     expect(r.llm('commentary-identify')).toHaveLength(2)
     expect(r.f.told).toHaveLength(4)
     expect(r.ctl.status()).toMatchObject({ game: 'Other Game', sure: true, summary: '' })
-    expect(r.prompt()).toContain('the streamer is playing Other Game')
+    expect(r.prompt()).toContain('the game or program on the screen is Other Game')
     expect(r.prompt()).not.toContain('What has happened so far')
     expect(r.f.events.join('\n')).toContain('this is now "Other Game"')
     // the old game's notes are gone too: the next story starts from the new game only
@@ -527,12 +527,12 @@ describe('what the model is told about the screen, in every reply while the mode
     await r.tick(1500)
     await r.tick(8000)
     const text = r.prompt() as string
-    expect(text).toContain('the streamer is playing Some Game. Last seen: note 1')
+    expect(text).toContain('the game or program on the screen is Some Game. Last seen: note 1')
     expect(text).toContain('What has happened so far this stream')
     expect(text).toContain('They explored a forest and began to build.')
     expect(text).not.toContain('{{')
     // a viewer who asks what game this is gets the answer from this
-    expect(text).toContain('if they ask what game this is')
+    expect(text).toContain('if they ask what game or program this is')
   })
 
   it('cannot be made to give orders by what is written in a picture', async () => {
@@ -590,7 +590,7 @@ describe('the memory of the stream', () => {
     await r.exit()
     await r.enter()
     expect(r.ctl.status()).toMatchObject({ game: 'Some Game', rounds: 2 })
-    expect(r.prompt()).toContain('the streamer is playing Some Game')
+    expect(r.prompt()).toContain('the game or program on the screen is Some Game')
     await r.tick(1500)
     expect(r.llm('commentary-identify')).toHaveLength(1) // it knows the game: no new identification on entering
     expect(r.ctl.status().rounds).toBe(3)
@@ -623,7 +623,7 @@ describe('the memory of the stream', () => {
     })
     await second.enter()
     expect(second.ctl.status()).toMatchObject({ game: 'Some Game', sure: true, rounds: 2 })
-    expect(second.prompt()).toContain('the streamer is playing Some Game')
+    expect(second.prompt()).toContain('the game or program on the screen is Some Game')
     expect(second.prompt()).toContain('They explored a forest and began to build.')
     await second.tick(1500)
     expect(second.llm('commentary-identify')).toHaveLength(0) // known, and not yet fifteen minutes old

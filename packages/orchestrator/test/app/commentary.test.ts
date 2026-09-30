@@ -176,7 +176,7 @@ describe('the commentary mode, through the whole program', () => {
     expect(r.llm.requests[0]?.tag).toBe('commentary-identify')
     expect(isComment(first!)).toBe(true)
     expect(systemText(first!)).toContain('You are watching the streamer')
-    expect(systemText(first!)).toContain('the streamer is playing Some Game')
+    expect(systemText(first!)).toContain('the game or program on the screen is Some Game')
     // the picture goes with the instruction, as an image part
     const content = first!.messages.at(-1)!.content as {
       type: string
@@ -246,10 +246,10 @@ describe('the commentary mode, through the whole program', () => {
     )
     const reply = speeches(r).find((q) => contentText(q).includes('what game is this'))!
     const prompt = systemText(reply)
-    expect(prompt).toContain('the streamer is playing Some Game')
+    expect(prompt).toContain('the game or program on the screen is Some Game')
     expect(prompt).toContain('What has happened so far this stream')
     expect(prompt).toContain('They explored a forest and began to build.')
-    expect(prompt).toContain('if they ask what game this is')
+    expect(prompt).toContain('if they ask what game or program this is')
     expect(contentText(reply)).toContain('what game is this') // the viewer's words, as an ordinary message
     expect(isComment(reply)).toBe(false)
     await until(
@@ -313,7 +313,7 @@ describe('the commentary mode, through the whole program', () => {
     await until(() => speeches(second.r).length >= 1, 8000, 'the first comment after the restart')
     const [comment] = speeches(second.r)
     // it knew the game and the story from the first moment, and did not have to ask which game it was
-    expect(systemText(comment!)).toContain('the streamer is playing Some Game')
+    expect(systemText(comment!)).toContain('the game or program on the screen is Some Game')
     expect(systemText(comment!)).toContain('They explored a forest and began to build.')
     expect(second.r.llm.requests.some((q) => q.tag === 'commentary-identify')).toBe(false)
   })
