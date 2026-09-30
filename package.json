@@ -1,0 +1,30 @@
+{
+  "name": "animatus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Animatus: a free, non-commercial, source-available AI VTuber runtime (orchestrator + empty VRM stage + separate console).",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,json,css,html}\" \"tools/**/*.mjs\"",
+    "secret-scan": "node tools/secret-scan/scan.mjs",
+    "probe": "node tools/vram-probe/probe.mjs",
+    "prepare": "node scripts/install-hooks.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.6.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

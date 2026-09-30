@@ -1,0 +1,58 @@
+# ── private: never goes into the public repo ──────────────────────────
+/ANIMATUS.md
+/.private/
+
+# ── secrets and local configuration ────────────────────────────────────
+.env
+.env.*
+!.env.example
+/config/
+/secrets/
+*.pem
+*.key
+*.p12
+credentials.*
+
+# ── runtime data (memory store, logs, probe output, caches) ────────────
+/data/
+/memory/
+/logs/
+/probe-out/
+/.cache/
+
+# ── assets that must not be committed (models, motions, audio, weights) ─
+# Users bring their own. Tests build fixtures in code or read them from
+# paths given by environment variables.
+*.vrm
+*.vrma
+*.glb
+*.gltf
+*.fbx
+*.bvh
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.m4a
+*.aac
+*.opus
+*.onnx
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+
+# ── dependencies and build output ──────────────────────────────────────
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+.venv/
+__pycache__/
+*.pyc
+.uv-cache/
+*.log
+.DS_Store
+Thumbs.db
