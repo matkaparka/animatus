@@ -595,6 +595,35 @@ describe('layer 1: a request on the blocklist', () => {
     await until(() => r.said.length === 2)
   })
 
+  it('a raid of blocked requests does not keep the voice busy: only a few refusal lines wait to be said', async () => {
+    const r = await rig()
+    const free = gate()
+    r.quiet.wait = free.wait
+    for (let i = 1; i <= 10; i++) r.chat('画 nude', { uid: i, uname: `viewer${i}` })
+    expect(r.events.filter((e) => e.includes('refused by the blocklist'))).toHaveLength(10)
+    free.open()
+    await until(() => r.said.length === 3)
+    await pause(80)
+    expect(r.said).toHaveLength(3)
+    expect(r.logs.some((l) => l.includes('a refusal or fault line was dropped'))).toBe(true)
+    r.chat('画 nude', { uid: 99 }) // the ones that were said made room
+    await until(() => r.said.length === 4)
+  })
+
+  it('a request that could not be looked at still costs the viewer their turn, so they cannot flood the voice with fault lines', async () => {
+    const words = path.join(await mkdtemp(path.join(tmpdir(), 'animatus-words-')), 'w.txt')
+    dirs.push(path.dirname(words))
+    await writeFile(words, 'nsfw\n', 'utf8')
+    const r = await rig({ config: { blocklist_files: [words] } })
+    await unlink(words)
+    r.clock.now += 10_000
+    for (let i = 0; i < 5; i++) r.chat('画 一条龙', { uid: 1 })
+    await until(() => r.said.length === 1)
+    await pause(60)
+    expect(r.said).toHaveLength(1)
+    expect(r.events.filter((e) => e.includes('cooldown'))).toHaveLength(4)
+  })
+
   it('a blocklist that cannot be read refuses every request loudly, and reading it again mends it', async () => {
     const words = path.join(await mkdtemp(path.join(tmpdir(), 'animatus-words-')), 'w.txt')
     dirs.push(path.dirname(words))
@@ -929,6 +958,41 @@ describe('stopping', () => {
     expect(work(r).filter((c) => c.path === '/generate')).toEqual([])
     expect(r.alarms).toEqual([])
     expect(r.said).toEqual([])
+  })
+
+  it('while the model is planning and takes no notice of being stopped: its late answer changes nothing', async () => {
+    const r = await rig()
+    const answer = gate()
+    r.llm.answer = async (req) => (
+      await answer.wait,
+      req.tag === 'draw-select' ? selectAnswer() : writeAnswer()
+    )
+    r.chat('画 一条龙')
+    await until(() => r.llm.calls.length === 1)
+    await r.exit()
+    const overlaysAfterExit = r.overlays.length
+    answer.open()
+    await pause(120)
+    expect(r.forge.generateCalls()).toEqual([])
+    expect(r.overlays).toHaveLength(overlaysAfterExit) // the frame is not put back on the stage
+    expect(r.frames().at(-1)).toMatchObject({ visible: false })
+    expect(r.told).toEqual([])
+    expect(r.said).toEqual([])
+    expect(r.alarms).toEqual([])
+  })
+
+  it('while the image service takes no notice of being stopped: its late picture is not shown, kept or commented on', async () => {
+    const r = await rig()
+    const held = gate()
+    r.forge.generate = async () => (await held.wait, okPicture())
+    r.chat('画 一条龙')
+    await until(() => r.forge.generateCalls().length === 1)
+    await r.exit()
+    held.open()
+    await pause(120)
+    expect(r.told).toEqual([])
+    expect(r.frames().at(-1)).toMatchObject({ visible: false })
+    expect(r.alarms).toEqual([])
   })
 
   it('what waits in the queue is dropped, and never drawn', async () => {

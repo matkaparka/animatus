@@ -60,6 +60,7 @@ const REQUIRED_PROMPTS = [
 /** How often the panel's view of the image service is refreshed while the mode runs. */
 const HEALTH_POLL_MS = 15_000
 const NAME_IN_PROMPT_CHARS = 24
+const MAX_PENDING_LINES = 3
 
 export interface DrawDeps {
   /** For tests. */
@@ -242,11 +243,28 @@ export function createDrawController(
     } else sayLine('errors')
   }
 
+  /** Refusals and fault lines waiting to be said. A raid of blocked requests must not keep the voice busy for minutes. */
+  let pendingLines = 0
+
   const react = (r: Reaction): void => {
+    const isLine = r.kind !== 'ok'
+    if (isLine) {
+      if (pendingLines >= MAX_PENDING_LINES) {
+        host.log(
+          'info',
+          'draw: a refusal or fault line was dropped: too many are waiting to be said'
+        )
+        return
+      }
+      pendingLines++
+    }
     const mine = epoch
     speaking = speaking
       .then(() => speak(r, mine))
       .catch((e) => host.log('warn', `draw: the comment could not be made: ${oneLine(e)}`))
+      .finally(() => {
+        if (isLine) pendingLines--
+      })
   }
 
   // ─────────────────────────────── the image service ───────────────────────────────
@@ -311,7 +329,11 @@ export function createDrawController(
           code: 'forge_unreachable',
           message: `Forge is not reachable${typeof health.config.forge_error === 'string' ? `: ${health.config.forge_error}` : ''}`,
         }
-      const planned = await planner.plan(job.text, await catalogOf(c, signal), signal)
+      const known = await catalogOf(c, signal)
+      if (signal.aborted) return { kind: 'cancelled' }
+      const planned = await planner.plan(job.text, known, signal)
+      // a model that took no notice of being stopped may still have answered: nothing more may happen then
+      if (signal.aborted) return { kind: 'cancelled' }
       if (planned.kind === 'refused') return { kind: 'refused', reason: planned.reason }
 
       // Layer 1 and the planner have passed: only now may the request be put on the stage.
@@ -323,6 +345,7 @@ export function createDrawController(
       })
       host.event('mode', `draw: drawing for ${job.user}: ${job.text}`)
       const drawn = await c.generate(planned.payload, signal)
+      if (signal.aborted) return { kind: 'cancelled' }
       if (drawn.status !== 'ok') return { kind: 'refused', reason: drawn.reason }
 
       const png = Buffer.from(drawn.image_b64, 'base64')
@@ -461,6 +484,9 @@ export function createDrawController(
       host.event('mode', `draw: a request from ${who.uname} was ignored, the queue is full`)
       return 'full'
     }
+    // From here on the viewer waits, whatever comes of the request: a refused one counts too (it is what stops a viewer
+    // from trying word after word), and so does one that could not be looked at (a raid must not flood the voice).
+    if (!skips) cooldowns.start(key)
     // Layer 1, before any model is asked and before anything of the request goes on the stage.
     let hit: string | null
     let user = who.uname
@@ -480,7 +506,6 @@ export function createDrawController(
       react({ kind: 'error' })
       return 'unavailable'
     }
-    if (!skips) cooldowns.start(key) // a refused request counts too: it is what stops a viewer from trying words
     if (hit !== null) {
       host.log('info', `draw: a request from ${who.uname} hit the blocklist entry "${hit}"`)
       host.event('mode', `draw: a request from ${user} was refused by the blocklist`)
@@ -560,6 +585,7 @@ export function createDrawController(
       if (showTimer) clearTimeout(showTimer)
       if (healthTimer) clearInterval(healthTimer)
       showTimer = healthTimer = null
+      catalog = null
       frame = { kind: 'idle' }
       send({ kind: 'hidden' })
       host.clearAlarm('draw_failed', 'draw')
