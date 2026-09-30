@@ -199,6 +199,7 @@ export function createSingController(
         uid: identity(cmd),
         name: cmd.name,
         waitSec: cfg.request_timeout_sec,
+        slackSec: cfg.request_slack_sec,
       })
       if (r.status === 'queued') {
         const title = safeText(r.song.title)

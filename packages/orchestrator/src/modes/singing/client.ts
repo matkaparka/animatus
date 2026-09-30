@@ -129,7 +129,7 @@ export class SongServiceClient {
 
   /**
    * A viewer's request. The service is told how long the caller will wait (`waitSec`) and answers within that,
-   * queueing nothing after it; the HTTP timeout is a little longer than that so the answer can arrive.
+   * queueing nothing after it; the HTTP timeout is `slackSec` longer, so that answer can arrive.
    */
   request(input: {
     requestId: string
@@ -137,6 +137,7 @@ export class SongServiceClient {
     uid: string
     name: string
     waitSec: number
+    slackSec: number
   }): Promise<RequestResult> {
     return this.call('POST', '/request', RequestResult, {
       body: {
@@ -146,7 +147,7 @@ export class SongServiceClient {
         requester_name: input.name,
         wait_s: input.waitSec,
       },
-      timeoutMs: input.waitSec * 1000 + 5000,
+      timeoutMs: (input.waitSec + input.slackSec) * 1000,
     })
   }
 

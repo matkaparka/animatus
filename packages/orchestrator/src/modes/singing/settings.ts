@@ -9,6 +9,9 @@ export const SingSettings = z.strictObject({
   poll_sec: z.number().min(0.1).max(60).default(2),
   /** How long a viewer's request may take (the search): it is also what the service is told to wait at most. */
   request_timeout_sec: z.number().min(1).max(100).default(20),
+  /** How much longer than the service is told to take, a request may wait before it is given up on: the service
+   * answers by its own deadline, so this only matters when it does not answer at all. */
+  request_slack_sec: z.number().min(0.1).max(60).default(5),
   /** Every other call to the service (queue, claim, done, cancel ...). */
   call_timeout_sec: z.number().min(0.5).max(60).default(5),
   /** A ready song waits this long for the voice to be quiet before it tries again on the next look. */
