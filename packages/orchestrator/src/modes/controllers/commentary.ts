@@ -94,8 +94,10 @@ interface Run {
   id: number
   abort: AbortController
   signal: AbortSignal
-  /** Ends the wait for the next pass early. */
+  /** Ends the wait for the next pass early; `nudge` says why. */
   wake: () => void
+  /** `now`: look at once. `retime`: the interval changed, so the wait is measured again and no pass is due because of it. */
+  nudge: 'now' | 'retime' | null
 }
 
 /** What the last capture (or the last test picture) was like, for the panel. */
@@ -263,7 +265,8 @@ export function createCommentaryController(
   /** After a capture by a fallback name worked, keep what the window is called now, so the next pass finds it at once. */
   const rememberPick = (w: CapturedFrame['window']) => {
     const pick = mem.window
-    if (!pick) return
+    // a window the operator typed the name of stays as typed ("part of a title" would not survive being made exact)
+    if (!pick || pick.id === null) return
     const next: WindowPick = {
       id: w.id,
       title: cleanTitle(w.title),
@@ -309,7 +312,7 @@ export function createCommentaryController(
 
   const startRun = (): Run => {
     const abort = new AbortController()
-    const r: Run = { id: ++runCounter, abort, signal: abort.signal, wake: () => {} }
+    const r: Run = { id: ++runCounter, abort, signal: abort.signal, wake: () => {}, nudge: null }
     run = r
     loop(r).catch((e) => host.log('error', `commentary: the loop stopped: ${firstLine(e)}`))
     return r
@@ -326,11 +329,35 @@ export function createCommentaryController(
     for (const code of [...raised.keys()]) clear(code)
   }
 
+  /** The wait that follows the pass in progress is the pause between comments (which the operator can change). */
+  let intervalWait = false
+
+  /** Wakes the loop: to look at once (the default), or to measure the wait again because the interval changed. */
+  const poke = (how: 'now' | 'retime' = 'now') => {
+    const r = run
+    if (!r) return
+    if (how === 'now' || r.nudge === null) r.nudge = how // a request to look at once wins over a re-timing
+    r.wake()
+  }
+
   const loop = async (r: Run) => {
     let delay = FIRST_LOOK_MS
+    /** When the pause between comments began; null while the wait in progress is some other wait. */
+    let restingSince: number | null = null
+    let due = host.now() + delay
     while (!r.signal.aborted) {
+      r.nudge = null
       await pause(delay, r)
       if (r.signal.aborted) return
+      if (r.nudge === 'retime') {
+        // the interval was changed during the wait: what is left of it is measured again, and nothing is due yet
+        if (restingSince !== null) due = restingSince + intervalMs()
+        if (due > host.now()) {
+          delay = due - host.now()
+          continue
+        }
+      }
+      intervalWait = false
       try {
         delay = await attempt(r)
       } catch (e) {
@@ -339,6 +366,8 @@ export function createCommentaryController(
         host.log('error', `commentary: a pass failed unexpectedly: ${firstLine(e)}`)
         delay = modelFailed(e)
       }
+      restingSince = intervalWait ? host.now() : null
+      due = host.now() + delay
     }
   }
 
@@ -346,6 +375,12 @@ export function createCommentaryController(
   const idle = (why: Phase, delay: number): number => {
     phase = why
     return delay
+  }
+
+  /** Marks the loop as in the pause between comments, which lasts `interval_sec` from now. */
+  const rest = (): number => {
+    intervalWait = true
+    return idle('waiting', intervalMs())
   }
 
   /** One pass. Returns how many milliseconds to wait before the next. */
@@ -377,13 +412,13 @@ export function createCommentaryController(
       frame = await captureFrame(r, queries)
     } catch (e) {
       if (!alive(r)) return 0
-      return captureFailed(e, interval)
+      return captureFailed(e)
     }
     if (!alive(r)) return 0
     issue.capture = null
     clear('commentary_capture')
     lastCapture = { at: host.now(), text: describeShot(frame) }
-    if (frame.black) return blackPicture(frame, interval)
+    if (frame.black) return blackPicture(frame)
     blackStreak = 0
     issue.black = null
     clear('commentary_black')
@@ -418,19 +453,19 @@ export function createCommentaryController(
     phase = 'voice'
     await host.whenQuiet(SPEECH_WAIT_MS)
     if (!alive(r)) return 0
-    return idle('waiting', interval)
+    return rest()
   }
 
-  const captureFailed = (e: unknown, interval: number): number => {
+  const captureFailed = (e: unknown): number => {
     const why = e instanceof CaptureError ? e.message : firstLine(e)
     const target = targetLabel()
     issue.capture = `cannot capture ${target ? `"${clip(target, 60)}"` : 'the window'}: ${why}`
     if (raise('commentary_capture', 'warn', issue.capture))
       host.log('warn', `commentary: capture failed: ${why}`)
-    return idle('waiting', interval)
+    return rest()
   }
 
-  const blackPicture = (frame: CapturedFrame, interval: number): number => {
+  const blackPicture = (frame: CapturedFrame): number => {
     blackFrames++
     blackStreak++
     issue.black = 'the window is black: exclusive fullscreen? (this picture is skipped)'
@@ -442,7 +477,7 @@ export function createCommentaryController(
           'an exclusive-fullscreen game shows nothing to a capture (switch it to windowed or borderless), ' +
           'or an overlay window was picked instead of the game'
       )
-    return idle('waiting', interval)
+    return rest()
   }
 
   /** A model call failed: alarm, and wait longer each time, up to a limit. */
@@ -687,7 +722,7 @@ export function createCommentaryController(
     for (const code of ['commentary_capture', 'commentary_black', 'commentary_window']) clear(code)
     save()
     host.event('mode', `commentary: now watching "${clip(targetLabel() ?? '', 60)}"`)
-    run?.wake()
+    poke()
   }
 
   const clearMemory = () => {
@@ -697,7 +732,6 @@ export function createCommentaryController(
     sinceRead = Number.MAX_SAFE_INTEGER
     save()
     host.event('mode', 'commentary: the game and the story so far were forgotten')
-    run?.wake()
   }
 
   /** A picture now, to see what the mode would see; no model is asked. */
@@ -873,19 +907,19 @@ export function createCommentaryController(
           await load()
           mem.interval = Math.min(MAX_INTERVAL_SEC, Math.max(MIN_INTERVAL_SEC, n))
           save()
-          run?.wake()
+          poke('retime') // no comment is due because of this: the pause in progress is only measured again
           return { ok: true }
         }
         case 'pause':
         case 'resume':
           if (!run) return { ok: false, reason: 'the mode is not running' }
           paused = action === 'pause'
-          run.wake()
+          poke()
           return { ok: true }
         case 'reidentify':
           reidentify = 'manual'
           host.event('mode', 'commentary: the next picture will be used to identify the game again')
-          run?.wake()
+          poke()
           return { ok: true }
         case 'test':
           await load()
