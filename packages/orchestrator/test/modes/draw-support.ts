@@ -244,6 +244,75 @@ export class FakeForgeService {
   }
 }
 
+/**
+ * A Forge server (the A1111 API the image service talks to) on a real local port, for the tests that run the real
+ * image service as a process.
+ */
+export class FakeForgeApi {
+  readonly txt2img: Record<string, unknown>[] = []
+  interrupts = 0
+  unloads = 0
+  models = ['anime-model', 'photo-model', 'furry-model', 'self-model'].map((name, i) => ({
+    title: `${name}.safetensors [${String(i + 1).repeat(8)}]`,
+    model_name: name,
+  }))
+  loras = [
+    { name: 'sword-lora', alias: 'SwordStyle' },
+    { name: 'self-lora', alias: null },
+    { name: 'photo-lora', alias: null },
+    { name: 'off-list-lora', alias: null },
+  ]
+  /** Set to hold every picture until it opens (an interrupt opens it too, as Forge stopping would). */
+  hold: { wait: Promise<void>; open: () => void } | null = null
+  private server: Server | null = null
+  url = ''
+
+  async start(): Promise<string> {
+    this.server = createServer((req, res) => void this.handle(req, res))
+    await new Promise<void>((resolve) => this.server!.listen(0, '127.0.0.1', resolve))
+    this.url = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`
+    return this.url
+  }
+
+  async stop(): Promise<void> {
+    this.server?.closeAllConnections()
+    await new Promise<void>((resolve) =>
+      this.server ? this.server.close(() => resolve()) : resolve()
+    )
+    this.server = null
+  }
+
+  private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const chunks: Buffer[] = []
+    for await (const c of req) chunks.push(c as Buffer)
+    const text = Buffer.concat(chunks).toString('utf8')
+    const send = (body: unknown, status = 200) => {
+      if (res.destroyed) return
+      res.writeHead(status, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(body))
+    }
+    const url = req.url ?? ''
+    if (url === '/sdapi/v1/options') return send({ sd_model_checkpoint: 'anime-model' })
+    if (url === '/sdapi/v1/sd-models') return send(this.models)
+    if (url === '/sdapi/v1/loras') return send(this.loras)
+    if (url === '/sdapi/v1/interrupt') {
+      this.interrupts++
+      this.hold?.open()
+      return send({})
+    }
+    if (url === '/sdapi/v1/unload-checkpoint') {
+      this.unloads++
+      return send({})
+    }
+    if (url === '/sdapi/v1/txt2img') {
+      this.txt2img.push(JSON.parse(text) as Record<string, unknown>)
+      if (this.hold) await this.hold.wait
+      return send({ images: [makePng().toString('base64')], info: '{}' })
+    }
+    send({ detail: 'Not Found' }, 404)
+  }
+}
+
 /** A gate: `wait()` blocks until `open()`. */
 export function gate(): { wait: Promise<void>; open: () => void } {
   let open!: () => void
