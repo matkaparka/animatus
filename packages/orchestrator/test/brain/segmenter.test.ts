@@ -1,5 +1,5 @@
 // Derived from AITuberKit (https://github.com/tegnike/aituber-kit), used under its Non-Commercial Use License; see licenses/AITuberKit-LICENSE.txt.
-// Changed: the legacy segmenter test cases are ported with their inputs and expectations unchanged (names translated to English; array access adapted to noUncheckedIndexedAccess; the engine-id table of the threshold lookup is now fixture data); new cases pin the port-specific guards and two legacy chunking quirks.
+// Changed: the legacy segmenter test cases are ported with their inputs and expectations unchanged (names translated to English; array access adapted to noUncheckedIndexedAccess; the engine-id table of the threshold lookup is now fixture data); new cases pin the port-specific guards, two legacy chunking quirks, and the handling of links and email addresses.
 
 import { describe, expect, it } from 'vitest'
 import {

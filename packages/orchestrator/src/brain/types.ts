@@ -1,5 +1,5 @@
 // Derived from AITuberKit (https://github.com/tegnike/aituber-kit), used under its Non-Commercial Use License; see licenses/AITuberKit-LICENSE.txt.
-// Changed: comments translated to English; added the motion-request, stream-delta and handler types used by the new orchestrator.
+// Changed: comments translated to English; added the motion-request, stream-delta and handler types used by the new orchestrator; a code event carries the language of its block and whether it was cut short.
 
 /**
  * Events emitted by `SpeechSegmenter`.

@@ -1,5 +1,5 @@
 // Derived from AITuberKit (https://github.com/tegnike/aituber-kit), used under its Non-Commercial Use License; see licenses/AITuberKit-LICENSE.txt.
-// Changed: comments translated to English; splitSentence comes from the legacy messages module; added parseEmotion and parseMotionTag; extractMotionTag guards its capture group for noUncheckedIndexedAccess.
+// Changed: comments translated to English; splitSentence comes from the legacy messages module; added parseEmotion and parseMotionTag; extractMotionTag guards its capture group for noUncheckedIndexedAccess; extractSentence does not end a sentence at a stop, question mark, exclamation mark or comma inside a link or an email address.
 
 import { EMOTIONS } from '@animatus/protocol'
 import type { Emotion } from '@animatus/protocol'

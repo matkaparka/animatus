@@ -2,6 +2,7 @@
   "name": "@animatus/stage",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "The empty stage: renders a VRM model, plays audio with lip sync, plays motion, reports playback. No settings, no menus, no shortcuts.",
   "type": "module",
   "scripts": {

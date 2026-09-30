@@ -2,6 +2,7 @@
   "name": "@animatus/console",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "The console: the only place anything is configured or approved. Opened in a normal browser window, never in the captured stage window.",
   "type": "module",
   "scripts": {

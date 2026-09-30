@@ -2,6 +2,7 @@
   "name": "@animatus/protocol",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Shared protocol types: stage WebSocket protocol, plugin manifest, mode manifest, event bus, tool tiers.",
   "type": "module",
   "exports": {

@@ -2,6 +2,7 @@
   "name": "@animatus/vram-probe",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Per-process GPU memory recorder for Windows (GPU Process Memory counters), with role attribution, marks and summaries.",
   "type": "module",
   "exports": {

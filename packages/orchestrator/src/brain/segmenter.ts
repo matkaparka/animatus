@@ -1,5 +1,5 @@
 // Derived from AITuberKit (https://github.com/tegnike/aituber-kit), used under its Non-Commercial Use License; see licenses/AITuberKit-LICENSE.txt.
-// Changed: comments translated to English; the table of TTS engines that want a short first segment is gone (the caller passes the number); non-finite thresholds fall back to the default.
+// Changed: comments translated to English; the table of TTS engines that want a short first segment is gone (the caller passes the number); non-finite thresholds fall back to the default; a code block reports the word after its opening fence (its language) and whether the stream ended before it was closed.
 
 import { extractEmotion, extractMotionTag, extractSentence } from './tags.ts'
 import type { SegmenterEvent } from './types.ts'

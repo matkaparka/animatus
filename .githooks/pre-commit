@@ -1,4 +1,5 @@
 #!/bin/sh
-# Blocks commits that contain secrets, personal paths or terms from the private deny list.
-# Findings are printed redacted. To bypass a false positive, add its path to .secretscanignore.
-exec node tools/secret-scan/scan.mjs --staged
+# Blocks commits that contain secrets, personal paths or terms from the private deny list, and assets or big files.
+# Findings are printed redacted. To bypass a false positive, add its path to .secretscanignore (secrets) or .assetscanignore (assets).
+node tools/secret-scan/scan.mjs --staged || exit 1
+exec node tools/asset-scan/scan.mjs --staged

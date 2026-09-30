@@ -4,6 +4,6 @@ import { defineConfig } from 'vitest/config'
 // tools/ holds loose scripts too, so only the directories that carry tests are listed.
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'tools/secret-scan'],
+    projects: ['packages/*', 'tools/secret-scan', 'tools/asset-scan', 'tools/license-audit'],
   },
 })

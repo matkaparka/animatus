@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Animatus: a free, non-commercial, source-available AI VTuber runtime (orchestrator + empty VRM stage + separate console).",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -19,6 +19,8 @@
     "test:watch": "vitest",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json,css,html}\" \"tools/**/*.mjs\"",
     "secret-scan": "node tools/secret-scan/scan.mjs",
+    "asset-scan": "node tools/asset-scan/scan.mjs",
+    "license-audit": "node tools/license-audit/audit.mjs",
     "probe": "npm run probe -w @animatus/vram-probe --",
     "prepare": "node scripts/install-hooks.mjs"
   },

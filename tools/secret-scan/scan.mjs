@@ -45,7 +45,10 @@ function privateFile(name) {
   const local = resolve(root, '.private', name)
   if (existsSync(local)) return local
   try {
-    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim()
     const main = resolve(root, common, '..')
     const p = resolve(main, '.private', name)
     if (existsSync(p)) return p

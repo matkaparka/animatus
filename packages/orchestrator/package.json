@@ -2,6 +2,7 @@
   "name": "@animatus/orchestrator",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "The brain: event bus, LLM gateway, speech scheduling, mode manager, plugin supervisor, stage and console servers.",
   "type": "module",
   "scripts": {
