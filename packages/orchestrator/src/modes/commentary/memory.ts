@@ -74,6 +74,10 @@ export function clip(text: string, max: number): string {
         .trimEnd()}…`
 }
 
+/** The first line of an error's message, bounded: what goes into an alarm or a log line. */
+export const firstLine = (e: unknown): string =>
+  clip(((e instanceof Error ? e.message : String(e)).split(/\r?\n/, 1)[0] ?? '').trim(), 200)
+
 /**
  * Text the model wrote about a picture, made safe to go back into a prompt: one line, no control or invisible
  * characters, square brackets turned into round ones (a note must not be able to look like a `[motion:...]` tag or a
