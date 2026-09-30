@@ -16,6 +16,16 @@ Dependencies keep their own licenses. The main ones:
 
 Python groups (`pyproject.toml`) pull in packages under their own licenses; `uv.lock` lists exact versions.
 
+## Code derived from other projects
+
+| Origin | License | Where |
+|---|---|---|
+| [AITuberKit](https://github.com/tegnike/aituber-kit) | Custom: non-commercial use license or a separate commercial license. Text in `licenses/AITuberKit-LICENSE.txt`. | The streaming sentence segmenter, tag extractors and the speech cancellation semantics in `packages/orchestrator` are derived from its speech pipeline. Each such file says so in its header. The license requires the notice to travel with the code and permits non-commercial use only, which this repository's license also does. |
+| wLipSync (hecomi), Web port by Noeri Huisman | MIT, text in `licenses/wLipSync-LICENSE.txt` | Used through the `wlipsync` npm package. |
+
+Files that only re-implement behaviour (the stage's look-at smoother, expression controller, VRMA helpers) are written
+from scratch and are not derived work.
+
 ## Assets are not included
 
 No 3D models, motions, dance choreography, music or voice weights are distributed with this
