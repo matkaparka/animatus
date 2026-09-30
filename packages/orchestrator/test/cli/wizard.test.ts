@@ -100,6 +100,7 @@ describe('first-run setup', () => {
       0, // voice: start it for me
       p('stuff/ref.wav'),
       'what the recording says',
+      0, // language: Chinese
       p('stuff/gsv'),
       '', // python: the guess
       '', // inference config: the guess
@@ -145,6 +146,7 @@ describe('first-run setup', () => {
       },
     })
     expect(cfg.tts.styles.neutral).toMatchObject({ ref_text: 'what the recording says' })
+    expect(cfg.tts).toMatchObject({ text_lang: 'zh', prompt_lang: 'zh' })
     expect(cfg.sources.bilibili).toMatchObject({ enabled: true, room_id: 4242 })
     expect(cfg.stage.browser?.executable).toBe(p('stuff/chrome.exe'))
     expect(result.next.join(' ')).toContain('npm start')
@@ -212,6 +214,7 @@ describe('first-run setup', () => {
       0, // voice: start it for me
       p('stuff/ref.wav'),
       'words',
+      '', // language: the first
       p('stuff/gsv'),
       '', // python: the guess
       p('stuff/gsv/nothing.yaml'), // not there
@@ -264,6 +267,7 @@ describe('first-run setup', () => {
       1, // voice: already running
       p('stuff/ref.wav'),
       'words',
+      1, // language: English
       '', // default address
       '',
     ])
@@ -284,6 +288,7 @@ describe('first-run setup', () => {
       enabled: true,
       config: { url: 'http://127.0.0.1:9880' },
     })
+    expect(cfg.tts).toMatchObject({ text_lang: 'en', prompt_lang: 'en' })
     expect(result.keyStored).toBe(false)
     expect(s.said.join('\n')).toContain('config/.env as OPENAI_API_KEY')
     expect(s.said.join('\n')).not.toContain('A-KEY')

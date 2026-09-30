@@ -122,6 +122,8 @@ export interface BrainOptions {
   chat: ChatLog
   /** The persona text, read at the start of every reply so an edit takes effect at once. */
   persona: () => string
+  /** What the model is told about the language of the voice (voiceNote.ts). */
+  voiceNote?: string
   /** Motion tags the stage can play right now. */
   motionTags?: () => readonly string[]
   /** Clip for a tag, or null when there is none. */
@@ -220,6 +222,7 @@ export class Brain extends EventEmitter<BrainEvents> {
     const n = (o.historyMessages ?? 10) + 1
     const { text, historyInlined } = buildSystemPrompt({
       persona: o.persona(),
+      ...(o.voiceNote ? { voiceNote: o.voiceNote } : {}),
       ...(o.motionTags ? { motionTags: o.motionTags() } : {}),
       modePrompts: o.modePrompts?.() ?? [],
       ...(o.tools ? { tools: o.tools(input) } : {}),

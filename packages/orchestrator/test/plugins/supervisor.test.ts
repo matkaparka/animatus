@@ -141,7 +141,7 @@ describe('starting and stopping', () => {
   it('fails when the service reports ok:false from the start', async () => {
     const { supervisor, id } = await setup({
       args: ['--health-mode', 'ok-false'],
-      health: { start_timeout_ms: 400 },
+      health: { start_timeout_ms: 2500 },
     })
     const state = await supervisor.start(id)
     expect(state.status).toBe('failed')

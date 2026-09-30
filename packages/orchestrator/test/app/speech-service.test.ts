@@ -122,7 +122,7 @@ describe('the speech service comes from its plugin', () => {
     })
     await until(() => r.app.alarms.has('plugin_failed', 'gptsovits-attach'), 4000, 'plugin alarm')
     const alarm = r.app.alarms.list().find((a) => a.code === 'plugin_failed')
-    expect(alarm?.message).toContain('config key "url" is not set')
+    expect(alarm?.message).toContain('plugins.gptsovits-attach.config.url is not set')
     expect(r.app.tts.attached).toBe(false)
   })
 

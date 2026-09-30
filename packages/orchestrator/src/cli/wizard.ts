@@ -76,6 +76,14 @@ async function askValid(
   throw new Error(`no usable answer to: ${question}`)
 }
 
+const VOICE_LANGUAGES = [
+  { name: 'Chinese', code: 'zh' },
+  { name: 'English', code: 'en' },
+  { name: 'Japanese', code: 'ja' },
+  { name: 'Korean', code: 'ko' },
+  { name: 'Cantonese', code: 'yue' },
+] as const
+
 const DEFAULT_BROWSERS = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
@@ -105,8 +113,9 @@ interface Answers {
         inferConfig: string
         refAudio: string
         refText: string
+        lang: string
       }
-    | { kind: 'attach'; url: string; refAudio: string; refText: string }
+    | { kind: 'attach'; url: string; refAudio: string; refText: string; lang: string }
     | null
   bilibiliRoom: number | null
 }
@@ -150,8 +159,8 @@ export function buildConfig(a: Answers): Record<string, unknown> {
     cfg.tts = {
       styles: { neutral: { ref_audio: slash(a.tts.refAudio), ref_text: a.tts.refText } },
       default_style: 'neutral',
-      text_lang: 'zh',
-      prompt_lang: 'zh',
+      text_lang: a.tts.lang,
+      prompt_lang: a.tts.lang,
     }
     cfg.plugins =
       a.tts.kind === 'start'
@@ -342,6 +351,16 @@ export async function runSetup(deps: SetupDeps): Promise<SetupResult> {
       'What the reference recording says, word for word',
       async () => null
     )
+    // GPT-SoVITS speaks one language per setting, and the model is told to write in it
+    const chosen =
+      VOICE_LANGUAGES[
+        await prompt.choose(
+          'What language is the voice (the recording, and what the character says)?',
+          VOICE_LANGUAGES.map((l) => l.name),
+          0
+        )
+      ]
+    const lang: string = chosen?.code ?? 'zh'
     if (voice === 0) {
       const gsvRoot = await askValid(prompt, 'The GPT-SoVITS folder', async (a) =>
         (await fs.exists(a)) === 'dir' ? null : `That folder does not exist: ${a}`
@@ -364,7 +383,15 @@ export async function runSetup(deps: SetupDeps): Promise<SetupResult> {
             : `There is no file at ${a}`,
         (await fs.exists(inferGuess)) === 'file' ? { default: slash(inferGuess) } : {}
       )
-      answers.tts = { kind: 'start', root: gsvRoot, python, inferConfig, refAudio: ref, refText }
+      answers.tts = {
+        kind: 'start',
+        root: gsvRoot,
+        python,
+        inferConfig,
+        refAudio: ref,
+        refText,
+        lang,
+      }
     } else {
       const url = await askValid(
         prompt,
@@ -372,7 +399,7 @@ export async function runSetup(deps: SetupDeps): Promise<SetupResult> {
         async (a) => (/^https?:\/\//.test(a) ? null : 'It should start with http:// or https://'),
         { default: 'http://127.0.0.1:9880' }
       )
-      answers.tts = { kind: 'attach', url, refAudio: ref, refText }
+      answers.tts = { kind: 'attach', url, refAudio: ref, refText, lang }
     }
   }
 

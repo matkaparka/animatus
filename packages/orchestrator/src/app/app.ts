@@ -28,6 +28,7 @@ import type { EventSource, ToolAuditEntry } from '@animatus/protocol'
 import { Brain } from '../brain/brain.ts'
 import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
+import { voiceNote } from '../brain/voiceNote.ts'
 import { parseConfig, secretRefs, toProviderConfig } from '../config.ts'
 import type { AppConfig, LlmProviderEntry } from '../config.ts'
 import { AutomationEngine } from '../automation/engine.ts'
@@ -271,6 +272,7 @@ export class App {
 
     // ── brain
     this.chat = new ChatLog(path.join(config.paths.data_dir, 'chat'))
+    const voiceLine = voiceNote(config.tts.text_lang)
     this.brain = new Brain({
       llm: { stream: (req) => this.currentLlm().stream(req) },
       director: this.director,
@@ -280,6 +282,7 @@ export class App {
         const extra = this.memory?.store.personaText() ?? ''
         return extra ? `${this.personaText}\n\n${extra}` : this.personaText
       },
+      ...(voiceLine ? { voiceNote: voiceLine } : {}),
       motionTags: () => this.motions?.promptTagList() ?? [],
       resolveMotion: (tag) => this.motions?.pick(tag) ?? null,
       modePrompts: () => this.modes.prompts(),

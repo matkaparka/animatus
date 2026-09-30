@@ -189,6 +189,14 @@ describe('a normal reply', () => {
     expect(req.signal).toBeInstanceOf(AbortSignal)
   })
 
+  it('tells the model which language the voice speaks, right after the persona', async () => {
+    const llm = scripted(['[neutral]ok.'])
+    const { brain } = setup(llm, { voiceNote: 'Your voice is a Japanese voice.' })
+    await brain.respond(viewer('hi'))
+    const system = (llm.requests[0] as LlmRequest).messages[0]?.content as string
+    expect(system.startsWith('You are Nova.\n\nYour voice is a Japanese voice.\n\n')).toBe(true)
+  })
+
   it('pictures go with the message just written, as parts of it, and the record keeps only its words', async () => {
     const llm = scripted(['[neutral]ok.'])
     const { brain, chat } = setup(llm)

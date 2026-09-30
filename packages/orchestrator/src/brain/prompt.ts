@@ -2,7 +2,7 @@
  * System prompt assembly. Prompts are Markdown files (the persona, one per mode) that the operator can edit;
  * this module only puts them together, in a fixed order, and fills a few `{{variables}}`.
  *
- * Order: persona, motion tags, prompts of the active modes, tools, recalled memory, free extras. Mode prompts are
+ * Order: persona, the language of the voice, motion tags, prompts of the active modes, tools, recalled memory, free extras. Mode prompts are
  * loaded when a mode is entered and dropped when it ends, so a quiet stream carries a short prompt.
  */
 
@@ -23,6 +23,8 @@ export interface ToolAdvert {
 
 export interface PromptParts {
   persona: string
+  /** One sentence about the language the voice speaks (see voiceNote.ts), put right after the persona. */
+  voiceNote?: string
   /** Clip tags the stage can play right now (data-driven from the motion library). */
   motionTags?: readonly string[]
   /** Prompts of the currently active modes. */
@@ -82,6 +84,7 @@ export function buildSystemPrompt(
   const historyInlined = persona.includes(HISTORY_PLACEHOLDER)
   if (historyInlined) persona = persona.split(HISTORY_PLACEHOLDER).join(p.historyText ?? '')
   const blocks: string[] = [renderTemplate(persona, vars)]
+  if (p.voiceNote) blocks.push(p.voiceNote)
 
   if (p.motionTags && p.motionTags.length > 0) {
     blocks.push(

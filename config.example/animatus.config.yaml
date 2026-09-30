@@ -70,8 +70,8 @@ tts:
       ref_audio: C:/path/to/reference/neutral.wav
       ref_text: What the reference recording says.
   default_style: neutral
-  text_lang: zh
-  prompt_lang: zh
+  text_lang: zh                  # the language the voice speaks: zh en ja ko yue (zh also reads English words). The model is told to write in it
+  prompt_lang: zh                # the language of the reference recordings
   split_method: cut5
 
 speech:
