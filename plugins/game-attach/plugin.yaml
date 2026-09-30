@@ -1,0 +1,36 @@
+manifest_version: 1
+id: game-attach
+title: Game worker (already running)
+description: >-
+  Use a game worker that speaks the Worker protocol and that you started yourself (docs/workers.md). Animatus only checks
+  that it answers; it never starts or stops it.
+version: 0.1.0
+kind: custom
+service: game
+provides: [game.worker]
+
+runtime:
+  type: external
+  url: "{config.url}"
+
+health:
+  http: { path: /worker/state, method: GET, expect_status: 200, ready_field: null }
+  start_timeout_ms: 10000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+resources:
+  gpu: false
+  vram_mb_est: null
+  config_keys: []
+  note: The worker is not ours, so its memory is not managed here.
+
+config_schema:
+  type: object
+  required: [url]
+  properties:
+    url:
+      type: string
+      title: Worker address
+      description: For example http://127.0.0.1:8098

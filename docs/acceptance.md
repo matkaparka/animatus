@@ -124,6 +124,20 @@ Not yet done: nothing for P2.
 - A picture sent to the model can carry writing, so `tellBrain` with pictures is untrusted whatever the mode
   says (see P5).
 
+## The Worker protocol (docs/workers.md)
+
+- **Tested:** the client and the events feed against a fake worker that follows the spec (25 tests: state checked against the
+  protocol, a wrong worker refused, a bad or huge answer, a worker that never answers is a timeout and one that is gone is
+  unreachable, directives checked before they are sent, pages of events read whole and none twice, and a restart noticed: a
+  reader that had seen 200 events and then meets a new run that has said 120 gets all 120, and one that meets a run that
+  has said more than it had seen gets them all too); the adapter for the older link against a fake of it (10 more: both
+  agents' status mapped, the restart noticed from the numbers going backwards, and the case it cannot notice written down
+  as a test); the Python kit (22 tests: the state's rules, every route over real HTTP, the host check, body limits, thread
+  safety) and the demo worker (4, plus one through the real supervisor and the real process: it starts paused, plays when told,
+  takes a directive, forgets, pauses, and a restart is a new epoch that a reader with the old one is told to start over from).
+- **Not verified:** a real Civilization VI or Minecraft agent behind the adapter, and a real game. The older agents' own
+  code is not changed.
+
 ## Sing mode and the singing service (docs/mode-sing.md)
 
 - **Tested:** 247 Python tests (with fakes for the song source, the runner, the clock and a fake NetEase server, and one real

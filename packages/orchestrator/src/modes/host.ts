@@ -14,6 +14,7 @@ import type { ChatPart } from '../llm/types.ts'
 import type { StageHub } from '../stage/hub.ts'
 import type { MotionLibrary } from '../library/motionLibrary.ts'
 import type { SecretStore } from '../plugins/secrets.ts'
+import type { ToolSpec } from '../tools/registry.ts'
 import type { ModeContext, ModeController } from './manager.ts'
 
 /** Flags the pacer reads: while one is set the audience's messages wait. */
@@ -121,6 +122,15 @@ export interface ModeHost {
   // ── song requests
   /** A line about a song (`FORMATS.songQueued` and friends) for the model to react to, ahead of gifts and chat. */
   songLine(text: string): void
+
+  // ── tools
+  /**
+   * Offer the model a tool while the mode is active: register it in `enter`, call the returned function in `exit`. It goes
+   * through the same gate as every other tool (the tier from the configuration, refused for the audience unless it is
+   * free; see docs/tools.md). Give it the tier `free` only if a viewer may safely cause what it does, `approval` (with a
+   * floor) otherwise. A tool of the same name that is already there is replaced.
+   */
+  registerTool<A>(spec: ToolSpec<A>): () => void
 }
 
 export interface LlmTextRequest {

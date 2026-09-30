@@ -164,6 +164,9 @@ export class App {
   readonly automation: AutomationEngine
   private readonly modeStates = new Map<string, string>()
   private readonly toolAudit: AuditSink
+  private readonly toolRegistry = new ToolRegistry()
+  /** The tool calls of the model's replies, one at a time. */
+  private toolChain: Promise<void> = Promise.resolve()
   /** What became of the tools the model asked for, told to it at the start of its next reply. */
   private toolNotes: string[] = []
   private libraryDirs: Readonly<Record<string, string>> = {}
@@ -408,7 +411,7 @@ export class App {
       path.join(config.paths.data_dir, 'tool-audit.jsonl'),
       (level, msg) => this.logger(level, msg)
     )
-    const toolRegistry = new ToolRegistry()
+    const toolRegistry = this.toolRegistry
     const mem2 = this.memory
     registerBuiltinTools(toolRegistry, {
       noteToStreamer: (text, origin) => this.noteToStreamer(text, origin),
@@ -665,13 +668,14 @@ export class App {
       this.runLog.add('llm', `motion tag "${m.tag}" names no clip`)
     )
     this.brain.on('tool.call', (c) => {
-      // the gate never throws; the outcome reaches the console, the audit trail and the model's next reply through onToolAudit
-      void this.tools.request({
-        tool: c.tool,
-        args: c.args,
-        origin: c.origin,
-        turnId: c.turnId,
-      })
+      // One at a time, in the order the model wrote them: a reply that asks for a mode and then for a note about it means
+      // that order. The gate never throws; the outcome reaches the console, the audit trail and the model's next reply
+      // through onToolAudit.
+      this.toolChain = this.toolChain.then(() =>
+        this.tools
+          .request({ tool: c.tool, args: c.args, origin: c.origin, turnId: c.turnId })
+          .then(() => undefined)
+      )
     })
     this.brain.on('tool.ignored', (c) =>
       this.runLog.add('tool', `a tool block in the reply was not taken (${c.reason})`)
@@ -1227,6 +1231,11 @@ export class App {
       assetUrl: (library, ...parts) => assetUrl(library, ...parts),
       llmText: (req) => app.llmText(req),
       songLine: (text) => this.router.addSongLine(text),
+      registerTool: (spec) => {
+        this.toolRegistry.unregister(spec.name)
+        this.toolRegistry.register(spec)
+        return () => void this.toolRegistry.unregister(spec.name)
+      },
     }
   }
 

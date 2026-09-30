@@ -1,0 +1,39 @@
+manifest_version: 1
+id: game-attach-legacy
+title: Game agent, older link (already running)
+description: >-
+  Use a Civilization VI player or a Minecraft bot that speaks the older link (GET /status, GET /events, POST /command,
+  /pause, /forget) and that you started yourself. Animatus only checks that it answers; it never starts or stops it. Set
+  modes.game.config.protocol to legacy (docs/workers.md).
+version: 0.1.0
+kind: custom
+service: game
+provides: [game.worker]
+
+runtime:
+  type: external
+  url: "{config.url}"
+
+health:
+  http: { path: /status, method: GET, expect_status: 200, ready_field: null }
+  start_timeout_ms: 10000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+resources:
+  gpu: false
+  vram_mb_est: null
+  config_keys: []
+  note: >-
+    The agent is not ours, so its memory is not managed here. A Minecraft bot's local model needs about 4 GB of graphics
+    memory and 20 GB of RAM; a Civilization player using a hosted model needs none.
+
+config_schema:
+  type: object
+  required: [url]
+  properties:
+    url:
+      type: string
+      title: Agent address
+      description: For example http://127.0.0.1:8098

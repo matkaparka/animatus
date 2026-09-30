@@ -145,6 +145,13 @@ tool, not by the model, so it says what will really happen. A model that has bee
 the conversation can still misjudge a later moderator request (the history is in its prompt); the same yes is the
 safeguard there. A free tool is only as safe as what it does: keep them to actions a viewer may cause.
 
+## Tools a mode brings
+
+A mode can offer the model a tool for as long as it is active: `host.registerTool(spec)` in `enter`, the returned function in
+`exit` (docs/modes.md). While the mode runs, the tool is in the prompt (to whom it may be offered depends on its tier, as for
+every tool), in the audit trail and in the operator's `tools.tiers` by its name; when the mode ends it is gone, and a call
+for it is an unknown tool. The game mode's `game_command` is one.
+
 ## Adding a tool
 
 A tool is a name, a schema for its arguments, a one-line `summarize`, and `run`. Register it in

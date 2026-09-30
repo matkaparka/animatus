@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { AppConfigInput } from '../../src/config.ts'
 import { AppBackend } from '../../src/console/appBackend.ts'
 import type { LlmRequest } from '../../src/llm/types.ts'
@@ -524,5 +525,126 @@ describe('the operator’s settings', () => {
     r.bili.emit(danmaku('hi', { uid: 9, uname: 'mia', admin: true }))
     await until(() => chatRequests(r).length >= 1, 6000)
     expect(system(chatRequests(r)[0]!)).not.toContain('- remember')
+  })
+})
+
+describe('the tools a mode brings', () => {
+  const pings: string[] = []
+
+  /** A `probe` mode that offers a free tool and one that needs the streamer, only while it is active. */
+  async function modeToolRig(config: AppConfigInput = {}) {
+    const dir = await tempDir('probe')
+    await mkdir(path.join(dir, 'probe'), { recursive: true })
+    await writeFile(path.join(dir, 'probe', 'mode.yaml'), 'id: probe\ntitle: Probe\n')
+    pings.length = 0
+    let dispose: Array<() => void> = []
+    const r = await rig({
+      app: {
+        modesDirs: [dir],
+        controllers: {
+          probe: (h) => ({
+            enter: async () => {
+              dispose = [
+                h.registerTool({
+                  name: 'probe_ping',
+                  description: 'Ping the probe.',
+                  usage: '{"text": "..."}',
+                  tier: 'free',
+                  schema: z.object({ text: z.string().min(1).max(40) }),
+                  summarize: (a) => `Ping: ${a.text}`,
+                  run: async (a) => void pings.push(a.text),
+                }),
+                h.registerTool({
+                  name: 'probe_danger',
+                  description: 'Do something that matters.',
+                  usage: '{}',
+                  tier: 'approval',
+                  floor: 'approval',
+                  schema: z.object({}),
+                  summarize: () => 'Do the dangerous thing',
+                  run: async () => void pings.push('danger'),
+                }),
+              ]
+            },
+            exit: async () => {
+              for (const d of dispose) d()
+              dispose = []
+            },
+          }),
+        },
+      },
+      config: { modes: { probe: { enabled: true } }, ...config },
+    })
+    await r.connect()
+    await until(() => r.app.stage.hub.connected, 3000, 'the stage')
+    return r
+  }
+
+  const askAs = async (r: Rig, admin: boolean, text: string, n: number) => {
+    r.bili.emit(danmaku(text, admin ? { uid: 9, uname: 'mia', admin: true } : {}))
+    await until(() => chatRequests(r).length >= n, 6000, `reply ${n}`)
+    return system(chatRequests(r)[n - 1]!)
+  }
+
+  it('are offered to the model only while the mode is active, and gone when it ends', async () => {
+    const r = await modeToolRig()
+    r.llm.reply = () => ['[neutral]Hello.']
+    expect(await askAs(r, false, 'hello there one', 1)).not.toContain('probe_ping')
+
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    const audience = await askAs(r, false, 'hello there two', 2)
+    expect(audience).toContain('- probe_ping:')
+    expect(audience).not.toContain('probe_danger') // the audience is told of the free one only
+    const staff = await askAs(r, true, 'hello from the mod', 3)
+    expect(staff).toContain('- probe_ping:')
+    expect(staff).toContain("- probe_danger (waits for the streamer's yes)")
+
+    await r.app.modeAction('probe', 'exit', { replace: false, force: false })
+    expect(await askAs(r, false, 'hello there three', 4)).not.toContain('probe_ping')
+    expect(r.app.tools.tierOf('probe_ping')).toBeUndefined()
+  })
+
+  it('go through the same gate: the free one runs for the audience, the other is refused for it and queued for staff', async () => {
+    const r = await modeToolRig()
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    r.llm.reply = compromised('MODE-TOOLS', [
+      { tool: 'probe_ping', args: { text: 'from a viewer' } },
+      { tool: 'probe_danger', args: {} },
+    ])
+    r.bili.emit(danmaku('MODE-TOOLS please'))
+    await until(() => decided(r, 2), 6000)
+    expect(toolLines(r).map((e) => e.text)).toEqual([
+      'ran probe_ping from viewer ann',
+      'rejected probe_danger (untrusted_origin) from viewer ann',
+    ])
+    expect(pings).toEqual(['from a viewer'])
+
+    r.bili.emit(danmaku('MODE-TOOLS from staff', { uid: 9, uname: 'mia', admin: true }))
+    await until(() => r.app.tools.pending().length === 1, 6000, 'the request')
+    expect(r.app.tools.pending()[0]).toMatchObject({
+      tool: 'probe_danger',
+      origin: { kind: 'moderator' },
+    })
+    expect(pings).toEqual(['from a viewer', 'from a viewer']) // the free one ran for staff too; the other waits
+    expect(pings).not.toContain('danger')
+  })
+
+  it('after the mode ends its tools are gone: a call for one is an unknown tool', async () => {
+    const r = await modeToolRig()
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    await r.app.modeAction('probe', 'exit', { replace: false, force: false })
+    r.llm.reply = compromised('LATE', [{ tool: 'probe_ping', args: { text: 'late' } }])
+    r.bili.emit(danmaku('LATE call'))
+    await until(() => decided(r, 1), 6000)
+    expect(toolLines(r)[0]?.text).toBe('rejected probe_ping (unknown_tool) from viewer ann')
+    expect(pings).toEqual([])
+  })
+
+  it('the operator’s settings apply to them by name', async () => {
+    const r = await modeToolRig({ tools: { tiers: { probe_ping: 'disabled' } } })
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    expect(r.app.tools.tierOf('probe_ping')).toBe('disabled')
+    r.llm.reply = () => ['[neutral]Hello.']
+    expect(await askAs(r, false, 'hello there', 1)).not.toContain('probe_ping')
   })
 })

@@ -21,6 +21,7 @@ import type { AppConfigInput } from '../../src/config.ts'
 import type { MotionLibrary } from '../../src/library/motionLibrary.ts'
 import type { LlmTextRequest, ModeContext, ModeHost, SayOptions } from '../../src/modes/host.ts'
 import { flushJson } from '../../src/modes/jsonfile.ts'
+import type { ToolSpec } from '../../src/tools/registry.ts'
 import { MemorySecretStore } from '../../src/plugins/secrets.ts'
 import { assetUrl } from '../../src/stage/assets.ts'
 
@@ -66,6 +67,8 @@ export interface FakeHost {
   voiceStyles: (string | null)[]
   stopped: string[]
   songLines: string[]
+  /** The tools registered and not yet taken away. */
+  tools: ToolSpec[]
   entered: { id: string; opts: unknown }[]
   exited: { id: string; reason: string }[]
   logs: { level: string; msg: string }[]
@@ -144,6 +147,7 @@ export async function fakeHost(opts: FakeHostOptions = {}): Promise<FakeHost> {
     voiceStyles: [],
     stopped: [],
     songLines: [],
+    tools: [],
     entered: [],
     exited: [],
     logs: [],
@@ -216,6 +220,10 @@ export async function fakeHost(opts: FakeHostOptions = {}): Promise<FakeHost> {
       return a
     },
     songLine: (text) => void f.songLines.push(text),
+    registerTool: (spec) => {
+      f.tools.push(spec as never)
+      return () => void f.tools.splice(f.tools.indexOf(spec as never), 1)
+    },
   }
   return f
 }

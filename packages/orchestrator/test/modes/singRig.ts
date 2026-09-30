@@ -285,6 +285,7 @@ export async function singRig(
     assetUrl: (library, ...parts) => assetUrl(library, ...parts),
     llmText: async () => '',
     songLine: (text) => void songLines.push(text),
+    registerTool: () => () => {},
   }
 
   service = new ModeService({

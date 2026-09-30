@@ -1,0 +1,40 @@
+manifest_version: 1
+id: game-demo
+title: Demo game worker
+description: >-
+  A pretend game that ticks along by itself, reports what "happens" and takes the character's directives. It exists to try
+  the game mode without a game, and as the smallest example of a worker (docs/workers.md). It plays nothing and touches
+  nothing outside its own process.
+version: 0.1.0
+kind: custom
+service: game
+provides: [game.worker]
+
+runtime:
+  type: process
+  env: light                 # standard library only
+  command: ["{python}", "service.py", "--port", "{port}"]
+  cwd: "{plugin_dir}"
+  port: auto
+  guard: true
+  stop:
+    http: { method: POST, path: /shutdown }
+    grace_ms: 3000
+
+health:
+  http: { path: /health }
+  start_timeout_ms: 15000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+restart:
+  policy: on-failure
+  max_restarts: 3
+  backoff_ms: [1000, 5000, 15000]
+
+resources:
+  gpu: false
+  vram_mb_est: null
+  ram_mb_est: null
+  note: A loop that counts; no GPU and next to no memory.

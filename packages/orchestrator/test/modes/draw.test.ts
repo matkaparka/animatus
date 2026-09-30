@@ -188,6 +188,7 @@ async function rig(
       return llm.answer(req)
     },
     songLine: () => {},
+    registerTool: () => () => {},
   }
   let ctl!: Controller
   service = new ModeService({

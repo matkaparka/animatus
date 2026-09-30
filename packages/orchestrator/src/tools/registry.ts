@@ -47,6 +47,11 @@ export class ToolRegistry {
     this.tools.set(spec.name, spec as ToolSpec)
   }
 
+  /** Takes a tool away (a mode's tool when the mode ends). False when there was none of that name. */
+  unregister(name: string): boolean {
+    return this.tools.delete(name)
+  }
+
   get(name: string): ToolSpec | undefined {
     return this.tools.get(name)
   }

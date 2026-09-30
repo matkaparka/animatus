@@ -179,6 +179,7 @@ async function rig(
     assetUrl: (library, ...parts) => `/asset/${[library, ...parts].join('/')}`,
     llmText: async () => '',
     songLine: () => {},
+    registerTool: () => () => {},
   }
 
   service = new ModeService({

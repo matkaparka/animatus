@@ -246,6 +246,7 @@ export async function rig(opts: RigOpts = {}): Promise<Rig> {
     assetUrl: (library, ...parts) => assetUrl(library, ...parts),
     llmText: async () => '',
     songLine: () => {},
+    registerTool: () => () => {},
   }
 
   const deps: SleepDeps = {
