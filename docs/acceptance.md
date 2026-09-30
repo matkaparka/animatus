@@ -152,6 +152,41 @@ Not yet done: nothing for P2.
 - **Not verified:** a real Civilization VI or Minecraft agent behind the adapter, and a real game. The older agents' own
   code is not changed.
 
+## Game mode (docs/mode-game.md)
+
+- **Tested:** 214 tests of the mode: through the real mode service and the real pack with fakes of the agent over real
+  sockets, in process under fake timers, and at random (100 seeds of 70 steps by default, 2000 run once, invariants checked
+  after every step); 17 through the whole program (real stage server, router, pacer, brain, tool gate and supervisor, with
+  the model, the voice and the stage page scripted: an event spoken at once, the tool block reaching the agent, a viewer
+  steering only through the free tool and never queueing an approval, injected "ignore your rules" text and fake tool
+  blocks with a model that obeys, a restart, alarms, shutdown in each phase); 3 against the real Python demo worker under
+  the real supervisor. Whole suite on the merged tree: 179 files, 4092 tests pass, 3 skipped. Breaking the mode on
+  purpose in several places made the tests fail each time. The random test found a real bug (an abandoned queued start
+  still asked the agent once), and two older bugs turned up in the worker client and the events feed (both fixed, with
+  tests).
+- **With the real services** (the real application, the demo worker as a process under the supervisor and the job guard,
+  Gemini, GPT-SoVITS and a Chrome stage window; the mode entered through the console's API): the first comment came
+  about 7 s after entering and then one about every 15 s (`comment_gap_sec: 10` plus the time to speak), in the persona's
+  voice with emotion tags and poses, about the turn or, when there was one, the milestone ("the fifth turn: 25 gold and a
+  new district"). A directive sent from the panel reached the agent and was logged as sent from the console. A
+  viewer's suggestion that went against that plan was declined in the character's own words, with no tool call; a
+  second suggestion (send someone to explore) was taken up: the model wrote a `game_command` block, the gate ran it
+  as a free tool for an untrusted viewer, the audit trail has the line (origin viewer, decision ran), and the demo's
+  next events show the exploration. Killing the demo worker's process: the supervisor restarted it in 1 s, the panel
+  said the agent did not answer and then that it did, the mode noticed the new epoch, resumed the agent, and the
+  character said the game had reset to turn 2. Leaving the mode paused the agent and stopped the plugin.
+- **A bug that run found, fixed:** leaving the mode took 21 s and raised an error alarm ("GPU memory is 3254 MiB, above
+  the 2752 MiB it was before"): the speech server's cache had grown and the mode manager blamed the game mode, which
+  uses no GPU. The wait and the alarm now only follow a mode that stopped a plugin process that uses the GPU (tests in
+  `test/modes/manager.test.ts`); leaving the game mode took about a second afterwards.
+- **Not verified:** a real Minecraft bot or Civilization player (only fakes built from their README and link code, and the
+  demo worker); the console page drawing the game panel (its data was read through the API); a run longer than a
+  couple of minutes in real time (30 minutes only simulated: 93 comments, never two at once); the event rates of the
+  real agents, so whether `comment_gap_sec: 20` is right for either; how a real model uses the tool over a long stream.
+- **Decisions for the operator** (written in the mode's doc): `game_command` is a `free` tool with no floor, so a viewer,
+  and a line another player wrote in the game, can lead the character to steer the agent; `tools.tiers.game_command` can
+  make it `approval` or `disabled`. Which agent runs (one at a time).
+
 ## Sing mode and the singing service (docs/mode-sing.md)
 
 - **Tested:** 247 Python tests (with fakes for the song source, the runner, the clock and a fake NetEase server, and one real
