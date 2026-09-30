@@ -1,0 +1,19 @@
+manifest_version: 1
+id: sing
+title: Song requests
+description: >-
+  Sings the songs viewers ask for in chat (a request, a cancel, a skip, a list: the chat commands are recognised
+  before this mode sees them). The queue, and getting each song ready (finding it, separating the vocals,
+  converting the voice), belong to the singing plugin; this mode plays a ready song on the stage with its lyrics,
+  holds the voice for its length, and says something afterwards.
+requires:
+  # Not `singing`: the plugin holds the queue, so it has to stay up while this mode is idle, and the mode manager
+  # stops the services of a mode when it ends. The plugin is started with the program (plugins.singing.enabled).
+  services: []
+  vram_mb_est: 0
+exclusive_with: [dance, draw, commentary, game]
+priority: 60
+prompt: prompts/active.md
+triggers:
+  hotkey: ctrl+alt+s
+  events: [song_command]

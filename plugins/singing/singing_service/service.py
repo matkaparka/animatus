@@ -39,7 +39,7 @@ from .sources.matching import Song, best_match
 from .util import check_song_id, fmt_duration, read_json, write_json_atomic
 
 WAITING = ('queued', 'downloading', 'processing', 'ready')
-OUTCOMES = ('done', 'skipped', 'stopped', 'interrupted', 'failed')
+OUTCOMES = ('done', 'skipped', 'stopped', 'interrupted', 'failed', 'released')
 MAX_KEYWORD = 200
 KEEP_REQUESTS = 500
 #: A song that nobody reports on is taken to be over after its length and this much more.
@@ -509,7 +509,8 @@ class SingingService:
 
     def done(self, qid: int | None, outcome: str, reason: str = '') -> dict[str, Any]:
         """The caller reports how the song it claimed ended: sung to the end (`done`), cut by a viewer (`skipped`) or
-        the operator (`stopped`), lost with the stage (`interrupted`) or never played (`failed`)."""
+        the operator (`stopped`), lost with the stage (`interrupted`), never played (`failed`), or never started through
+        nobody's fault (`released`: it goes back to the front of the queue)."""
         if outcome not in OUTCOMES:
             raise ValueError(f'outcome must be one of {", ".join(OUTCOMES)}')
         with self._lock:
@@ -523,16 +524,26 @@ class SingingService:
         self.current = None
         it['ended_at'] = self._clock()
         self.log.info('#%s "%s": %s%s', it['qid'], it['name'], outcome, f' ({reason})' if reason else '')
-        if outcome == 'failed':
-            # it never sounded: it does not count as sung, and the failure stays in the queue view for a while
+        if outcome in ('failed', 'released'):
+            # it never sounded, so it does not count as sung
             self.played.pop(it['song_id'], None)
             self._save_played()
+        if outcome == 'failed':
+            # the failure stays in the queue view for a while
             it.update(
                 state='failed', code='playback_failed', retryable=True, failed_at=self._clock(),
                 reason=self._text('step_failed'), error=(reason or 'the song could not be played')[:500],
             )
             self.items.append(it)
             self._save()
+        elif outcome == 'released':
+            # nobody is to blame (the operator stopped while it was loading): back to the front, ready to be claimed
+            for key in ('claim_id', 'started_at', 'ended_at'):
+                it.pop(key, None)
+            it['state'] = 'ready'
+            self.items.insert(0, it)
+            self._save()
+            self._wake.notify_all()
         return it
 
     def _expire_locked(self) -> None:

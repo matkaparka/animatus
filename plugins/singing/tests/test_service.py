@@ -619,6 +619,23 @@ class Playing(ServiceCase):
         self.assertEqual(failed['error'], 'the stage could not decode it')
         self.assertEqual(self.ask(svc, 'Alpha', 'u2')['status'], 'queued')  # no cooldown
 
+    def test_a_song_that_could_not_be_started_through_nobodys_fault_goes_back_to_the_front_ready(self):
+        svc = self.make()
+        self.ready(svc, 'Alpha', 'u1')
+        self.ready(svc, 'Beta', 'u2')
+        first = svc.claim('c1')
+        self.assertEqual(first['item']['title'], 'Alpha')
+        answer = svc.done(first['item']['qid'], 'released', 'the operator stopped while it loaded')
+        self.assertTrue(answer['ok'])
+        self.assertIsNone(svc.queue()['current'])
+        self.assertEqual([(it['title'], it['state']) for it in self.items(svc)], [('Alpha', 'ready'), ('Beta', 'ready')])
+        self.assertEqual(svc.claim('c2')['item']['title'], 'Alpha')  # taken again, in its place
+        svc.done(None, 'released')
+        self.assertEqual(self.ask(svc, 'Alpha', 'u3')['code'], 'already_queued')  # and it never started its cooldown
+        svc.claim('c3')
+        svc.done(None, 'done')
+        self.assertEqual(self.ask(svc, 'Alpha', 'u3')['code'], 'cooldown')
+
     def test_skipped_stopped_and_interrupted_songs_count_as_sung(self):
         for outcome in ('skipped', 'stopped', 'interrupted'):
             with self.subTest(outcome):
