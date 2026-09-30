@@ -19,6 +19,7 @@ import { EventEmitter } from 'node:events'
 import type { ClipRef, Emotion, MotionAdapter, TtsAdapter } from '@animatus/protocol'
 import { TtsError } from '../tts/gptsovits.ts'
 import { SpeechFilter, cleanSpeechText, isSpeakable } from '../tts/text.ts'
+import type { SafetyObserver } from './safety.ts'
 
 export interface SpeechItem {
   text: string
@@ -79,6 +80,8 @@ export interface SpeechDirectorOptions {
   reports: StageReports
   motion?: MotionAdapter & { available?(): boolean }
   filter?: SpeechFilter
+  /** The last check before a sentence is spoken and shown (see safety.ts). */
+  safety?: SafetyObserver
   /** How many sentences beyond the head of the line may be synthesised ahead of playback. */
   lookahead?: number
   /** How many sentences may be at the stage (sent, not yet ended) at once. */
@@ -318,12 +321,15 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
   enqueue(turn: SpeechTurn, item: SpeechItem): boolean {
     if (turn.id !== this.latestTurn || this.disabledTurns.has(turn.id)) return false
     const filtered = this.o.filter ? this.o.filter.apply(item.text) : item.text
-    const text = cleanSpeechText(filtered)
+    const text = cleanSpeechText(this.o.safety ? this.o.safety.sanitize(filtered) : filtered)
     if (!isSpeakable(text)) return false
+    // a sentence a stuck model keeps repeating is dropped like one with nothing to say
+    if (this.o.safety && !this.o.safety.admit(text)) return false
     // Whatever is said is shown, unless the caller gave the words itself (an empty string shows nothing). The words
     // on screen are public like the voice is: a word the voice replaces is replaced in them too.
     const shown = item.subtitle ?? item.text
-    const words = this.o.filter ? this.o.filter.apply(shown) : shown
+    const filteredWords = this.o.filter ? this.o.filter.apply(shown) : shown
+    const words = this.o.safety ? this.o.safety.sanitize(filteredWords, false) : filteredWords
     if (words !== item.subtitle) item = { ...item, subtitle: words }
     const seq = this.seq++
     const id = `${turn.id}-${++this.counter}`

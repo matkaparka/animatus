@@ -78,6 +78,10 @@ speech:
   sensitive_words_file: ./config/sensitive-words.txt
   lookahead: 2
   first_comma_min_chars: 10
+  safety:                          # the last check before the voice (docs/safety.md)
+    personal_info: true            # links, email addresses, long numbers, file paths and key-shaped strings become a bleep
+    repetition: true               # a sentence a stuck model keeps repeating is not spoken again
+    replacement: 哔                # plain words: brackets and markdown marks are stripped before speech
 
 # Audience input. Snake_case here; the defaults below are the legacy live-stream values.
 inbox:

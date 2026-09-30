@@ -208,6 +208,17 @@ observer as its own part and the unified worker protocol are not yet.
   request absent from the list.
 - **Not done:** the prompt block has not been tuned for reliability beyond the above.
 
+### The last check before the voice (docs/safety.md)
+
+- **Tested:** 30 unit tests (each shape replaced in Chinese and English context, thirteen kinds of ordinary text left alone
+  including dates, versions, prices and durations, one report per sentence, the loop rule and its window) and 5 through the
+  whole program (a phone number, a link and an email replaced in the voice and on screen, a run log line naming the class and
+  never the thing, ordinary numbers untouched, a stuck model's repeats not spoken with the alarm raised and cleared, the
+  settings). Found on the way: the sentence cutter split `https://example.com/x` after `example.`, so no check on a
+  sentence could see a whole link; it now keeps links and email addresses whole (six new cases, the 304 old ones unchanged).
+- **Not verified:** how often the shapes hit something they should not, or miss something they should, in a real stream's
+  speech; a bare domain (`example.com`) is not recognised.
+
 ### Automations (docs/automations.md)
 
 - **Tested:** 27 unit tests (the shape of a rule and its placeholders, what each action does, the trust of a reply and of

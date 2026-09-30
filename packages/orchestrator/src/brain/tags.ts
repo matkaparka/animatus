@@ -50,25 +50,49 @@ export const extractMotionTag = (text: string): { motionTag: string; remainingTe
   return { motionTag: '', remainingText: text }
 }
 
+/** A link (with a scheme, or starting with www.) or an email address: a run that a mark inside it does not end. */
+const LINK_OR_EMAIL =
+  /(?:https?:\/\/|www\.)[^\s，。！？、；：）)】》"'<>]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+\.?/gi
+/** Stands in for a mark that would end a sentence (a stop, a question or exclamation mark, a comma) while it is inside a link. */
+const MARK_IN_LINK = String.fromCharCode(0xe000)
+const SENTENCE_MARK = /[.?!,]/g
+
+/**
+ * The text with the marks inside links and email addresses masked, so that `https://example.com/x?a=1` is not cut after
+ * `example.` or after `x?`. A mark that ends the run and is followed by a space is a real sentence end and stays; one at
+ * the very end of the text is not known yet (the link may go on in the next chunk) and is masked, so the sentence waits.
+ */
+function maskLinkMarks(text: string): string {
+  if (!/[.?!,]/.test(text)) return text
+  return text.replace(LINK_OR_EMAIL, (m, offset: number) => {
+    const end = offset + m.length
+    const last = m.slice(-1)
+    const endsSentence = /[.?!,]/.test(last) && end < text.length && /\s/.test(text.charAt(end))
+    const body = endsSentence ? m.slice(0, -1) : m
+    return body.replace(SENTENCE_MARK, MARK_IN_LINK) + (endsSentence ? last : '')
+  })
+}
+
 /**
  * Extracts one sentence that ends at a natural break from the text.
  * @param text input text
  * @returns the sentence and the remaining text
  */
 export const extractSentence = (
-  text: string,
+  input: string,
   { commaMinChars = 10 }: { commaMinChars?: number } = {}
 ): { sentence: string; remainingText: string } => {
+  const text = input
+  const masked = maskLinkMarks(input)
   const normalizedCommaMinChars = Math.max(2, Math.floor(commaMinChars))
   const sentencePattern = new RegExp(
     `^(.{1,${normalizedCommaMinChars - 1}}?(?:[。．!?！？\\n]|(?<!\\d)\\.|\\.(?=[^\\d])|(?=\\[))|.{${normalizedCommaMinChars},}?(?:[、。．!?！？\\n]|(?<!\\d)[,.]|[,.](?=[^\\d])|(?=\\[)))`
   )
-  const sentenceMatch = text.match(sentencePattern)
+  // looked for in the masked copy, cut from the real text: both have the same length
+  const sentenceMatch = masked.match(sentencePattern)
   if (sentenceMatch?.[0]) {
-    return {
-      sentence: sentenceMatch[0],
-      remainingText: text.slice(sentenceMatch[0].length).trimStart(),
-    }
+    const sentence = text.slice(0, sentenceMatch[0].length)
+    return { sentence, remainingText: text.slice(sentence.length).trimStart() }
   }
   return { sentence: '', remainingText: text }
 }

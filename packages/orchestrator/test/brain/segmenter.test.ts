@@ -439,3 +439,72 @@ describe('SpeechSegmenter, known legacy chunking quirks', () => {
     ])
   })
 })
+
+// ── Links and email addresses stay whole (new in this port) ──────────────────
+
+describe('a full stop inside a link or an email address is not the end of a sentence', () => {
+  const run = (chunks: string[]) => {
+    const seg = new SpeechSegmenter()
+    return speechTexts([...pushAll(seg, chunks), ...seg.flush()])
+  }
+
+  it('a link with a scheme, in one piece or across chunks, is one piece of one sentence', () => {
+    expect(run(['See https://example.com/a/b?c=1 for more.'])).toEqual([
+      'See https://example.com/a/b?c=1 for more.',
+    ])
+    expect(run(['See https://exam', 'ple.', 'com/x', ' for more.'])).toEqual([
+      'See https://example.com/x for more.',
+    ])
+  })
+
+  it('a link starting with www, and an email address', () => {
+    expect(run(['Try www.example.co.uk/page today.'])).toEqual([
+      'Try www.example.co.uk/page today.',
+    ])
+    expect(run(['Write to first.last@mail.example.org please.'])).toEqual([
+      'Write to first.last@mail.example.org please.',
+    ])
+  })
+
+  it('a stop right after the link, followed by a space, still ends the sentence', () => {
+    expect(run(['Look at https://example.com/x. Then more words.'])).toEqual([
+      'Look at https://example.com/x.',
+      'Then more words.',
+    ])
+  })
+
+  it('a stop that ends a chunk right after a link waits for the next character before it decides', () => {
+    const seg = new SpeechSegmenter()
+    expect(speechTexts(seg.push('Look at https://example.com/x.'))).toEqual([])
+    expect(speechTexts(seg.push(' And then words.'))).toEqual([
+      'Look at https://example.com/x.',
+      'And then words.',
+    ])
+    // and the link may just as well go on
+    const more = new SpeechSegmenter()
+    expect(speechTexts(more.push('Look at https://example.com/x.'))).toEqual([])
+    expect(speechTexts([...more.push('html and more.'), ...more.flush()])).toEqual([
+      'Look at https://example.com/x.html and more.',
+    ])
+  })
+
+  it('a question mark, an exclamation mark or a comma inside a link does not end it either', () => {
+    // the comma after the link is a comma like any other; the marks inside the link are not
+    expect(run(['Open https://example.com/a?b=1&c=2, then the rest.'])).toEqual([
+      'Open https://example.com/a?b=1&c=2,',
+      'then the rest.',
+    ])
+    expect(run(['Did you see https://example.com/x? It was fun.'])).toEqual([
+      'Did you see https://example.com/x?',
+      'It was fun.',
+    ])
+  })
+
+  it('ordinary text with dots is cut as before', () => {
+    expect(run(['Hello there. This is a test. Version 3.14 is out.'])).toEqual([
+      'Hello there.',
+      'This is a test.',
+      'Version 3.14 is out.',
+    ])
+  })
+})

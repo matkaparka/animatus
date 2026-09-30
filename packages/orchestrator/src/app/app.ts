@@ -54,6 +54,7 @@ import { BilibiliSource } from '../sources/bilibili/index.ts'
 import type { BilibiliSourceEvent, BilibiliSourceOptions } from '../sources/bilibili/index.ts'
 import { parseCookieHeader } from '../sources/bilibili/cookies.ts'
 import { SpeechDirector } from '../speech/director.ts'
+import { SafetyObserver } from '../speech/safety.ts'
 import { assetUrl } from '../stage/assets.ts'
 import { launchStageWindow } from '../stage/launcher.ts'
 import { createConsoleLogger } from '../stage/logger.ts'
@@ -252,6 +253,12 @@ export class App {
       stage: stageOutput(this.stage.hub),
       reports: stageReports(this.stage.hub),
       filter,
+      safety: new SafetyObserver({
+        personalInfo: config.speech.safety.personal_info,
+        repetition: config.speech.safety.repetition,
+        replacement: config.speech.safety.replacement,
+        onEvent: (e) => this.onSafetyEvent(e),
+      }),
       lookahead: config.speech.lookahead,
       stageQueueMax: config.speech.stage_queue_max,
       log: (level, msg, extra) =>
@@ -930,6 +937,26 @@ export class App {
         ...(viewers.length > 0 ? { viewers } : {}),
       })
       .catch((e) => this.logger('error', `brain: ${(e as Error).message}`))
+  }
+
+  /** What the last check before the voice did: a line in the run log (the class of thing, never the thing) and an alarm for a loop. */
+  private onSafetyEvent(e: import('../speech/safety.ts').SafetyEvent): void {
+    if (e.kind === 'replaced') {
+      this.runLog.add(
+        'speech',
+        `safety: replaced ${e.classes.join(', ')} in a sentence before it was spoken`
+      )
+    } else if (e.kind === 'loop_start') {
+      this.runLog.add('speech', 'safety: a sentence is being repeated; the repeats are not spoken')
+      this.alarms.raise(
+        'speech_loop',
+        'warn',
+        'the model is repeating the same sentence; the repeats are not spoken',
+        'safety'
+      )
+    } else {
+      this.alarms.clear('speech_loop', 'safety')
+    }
   }
 
   // ───────────────────────────── tools ─────────────────────────────

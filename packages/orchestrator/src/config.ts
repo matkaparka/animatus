@@ -192,6 +192,17 @@ const Speech = z.strictObject({
   stage_queue_max: z.number().int().min(1).max(8).default(2),
   /** Characters before a comma may end the first sentence of a reply (the legacy value for this voice engine). */
   first_comma_min_chars: z.number().int().min(2).max(40).default(10),
+  /** The last check before a sentence is spoken and shown (docs/safety.md). */
+  safety: z
+    .strictObject({
+      /** Replace links, email addresses, long digit runs, file paths and key-shaped strings with the bleep. */
+      personal_info: z.boolean().default(true),
+      /** Do not speak a sentence a stuck model keeps repeating. */
+      repetition: z.boolean().default(true),
+      /** What stands in for a replaced piece. */
+      replacement: z.string().min(1).max(8).default('哔'),
+    })
+    .prefault({}),
 })
 
 const PluginEntry = z.strictObject({
