@@ -311,6 +311,10 @@ Pass criterion (brief section 12): on a clean machine, following the documentati
 - **A VRM 1 model on the real stage.** The run above used a VRM 0 sample; a VRM 1 model (a sample from the previous
   setup's model folder) was then put on the stage in a real Chrome window, and its built-in rest pose has the arms down
   and slightly forward, not lifted.
+- **A folder whose name has a space and Chinese characters.** The same run, from a clone in a folder named with both
+  (`<temp>/测试 目录/animatus`): install, build, setup, doctor (the encrypted key store read through PowerShell from that
+  path included), start with the speech server under its job guard and the Chrome stage window whose profile is in that
+  folder, and a chat message from a viewer with a Chinese name, all worked.
 - **Not done.** `npm install` with an empty npm cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
   previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A voice in another language than Chinese with the real
   GPT-SoVITS: the setting is tested, the sound is not. Another Windows account: the encrypted key store belongs to the
