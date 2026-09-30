@@ -1,0 +1,56 @@
+manifest_version: 1
+id: gptsovits
+title: GPT-SoVITS
+description: >-
+  Speech synthesis with reference-audio voice cloning. Starts your own GPT-SoVITS install
+  (its api_v2.py); nothing of it ships with Animatus.
+version: 0.1.0
+kind: tts
+service: tts
+provides: [tts.reference-audio]
+
+runtime:
+  type: process
+  env: external              # {python} is config.python: the interpreter of that install
+  command: ["{python}", "-s", "api_v2.py", "-a", "127.0.0.1", "-p", "{port}", "-c", "{config.tts_config}"]
+  cwd: "{config.root}"
+  port: auto
+  guard: true
+  stop:
+    grace_ms: 3000
+
+health:
+  # api_v2 has no health route. /docs answers 200 once the models are loaded and the server is up.
+  http: { path: /docs, method: GET, expect_status: 200, ready_field: null }
+  start_timeout_ms: 240000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+restart:
+  policy: on-failure
+  max_restarts: 2
+  backoff_ms: [2000, 10000]
+
+resources:
+  gpu: true
+  vram_mb_est: null          # measure it (docs/modes.md); the number depends on the weights in tts_config
+  config_keys: [tts_config]
+  note: Weights are loaded once and stay resident.
+
+config_schema:
+  type: object
+  required: [root, python, tts_config]
+  properties:
+    root:
+      type: string
+      title: GPT-SoVITS folder
+      description: The folder that holds api_v2.py.
+    python:
+      type: string
+      title: Python interpreter
+      description: The interpreter of that install (for the packaged version, runtime/python.exe inside its folder).
+    tts_config:
+      type: string
+      title: Inference config
+      description: The .yaml that names your GPT and SoVITS weights. Passed to api_v2.py with -c.

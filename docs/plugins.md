@@ -31,6 +31,8 @@ runtime:
 
 health:
   http: { path: /health }      # 200 + {ok:true, ready:true} means usable
+                               # ready_field: null  -> only the status code counts (third-party servers with
+                               #                       no health endpoint, probed with an HTML page)
   start_timeout_ms: 120000
   interval_ms: 5000
   fail_threshold: 3
@@ -48,6 +50,26 @@ secrets:                       # only these are injected, as environment variabl
 
 Placeholders in `command`, `cwd` and `env_vars`: `{port}`, `{python}`, `{plugin_dir}`, `{data_dir}`,
 `{config.<key>}`, `${secret:<name>}`, `${config:<key>}`.
+
+- `{python}` is the interpreter of `runtime.env`; for `external` it is the plugin's own `config.python`.
+- `${secret:<name>}` is accepted in `env_vars` **only** (a command line is visible in the process list),
+  and only for names listed under `secrets`.
+- The strings are checked strictly: an unknown placeholder, a config key that is not set or an
+  unterminated brace is an error that names the placeholder and never contains a resolved value.
+  `{{` and `}}` are literal braces.
+- For `runtime.type: external`, `url` may use `{config.<key>}`; after substitution it must be an http(s)
+  URL (this is how "use the speech server that is already running" takes its address from the settings).
+
+Two plugins can offer the same service name (GPT-SoVITS started by Animatus, and GPT-SoVITS that is
+already running); at most one of them may be enabled.
+
+Notes for people who write plugins:
+
+- A service that is `external` and down past its start timeout stays `failed` until it is started again
+  from the console; the orchestrator does not poll forever.
+- Secrets are decrypted (DPAPI) in a PowerShell child that receives the values on stdin. If your machine
+  has PowerShell script-block or module logging switched on by policy, that log can contain the plain
+  text; leave those off on the streaming machine or use `config/.env` instead.
 
 ## Service contract
 
