@@ -60,9 +60,16 @@ import type { StageServer } from '../stage/server.ts'
 import { GptSovitsTts, TtsError } from '../tts/gptsovits.ts'
 import { SwitchableTts } from '../tts/lazy.ts'
 import { SpeechFilter } from '../tts/text.ts'
-import type { TtsAdapter } from '@animatus/protocol'
+import type { TtsAdapter, VramMeasurement } from '@animatus/protocol'
 import { AlarmBoard, RunLog, TraceBoard } from './board.ts'
 import { AppError } from './errors.ts'
+import { builtinControllers } from '../modes/controllers/index.ts'
+import { GpuMeter } from '../modes/gpu.ts'
+import type { ActivityFlags, ModeHost } from '../modes/host.ts'
+import { loadModePacks } from '../modes/loader.ts'
+import type { LoadedMode } from '../modes/loader.ts'
+import { loadMeasurements } from '../modes/measurements.ts'
+import { ModeService } from '../modes/service.ts'
 
 /** Names the console's key page and `${secret:x}` references know, and the variables they are read from. */
 export const WELL_KNOWN_SECRETS: Readonly<Record<string, string>> = {
@@ -98,6 +105,8 @@ export interface AppOptions {
   noBrowser?: boolean
   /** How often the inbox is looked at. Default 500 ms, as in the legacy sender loop. */
   inboxTickMs?: number
+  /** Folders holding mode packs, later ones overriding earlier ones. Default: modes/ and config/modes/ under the project root. */
+  modesDirs?: string[]
   /** Where the plugin folders are. Default: plugins under the project root. */
   pluginsDir?: string
   /** `welcome.dev` for the stage. */
@@ -108,12 +117,7 @@ export interface AppOptions {
   consoleDir?: string
 }
 
-/** Flags the mode manager (dance, sing, sleep) will set; the pacer treats each as "busy". */
-export interface ActivityFlags {
-  dancing: boolean
-  singing: boolean
-  sleeping: boolean
-}
+export type { ActivityFlags } from '../modes/host.ts'
 
 export class App {
   readonly config: AppConfig
@@ -133,6 +137,10 @@ export class App {
   readonly traces = new TraceBoard()
   readonly alarms: AlarmBoard
   readonly flags: ActivityFlags = { dancing: false, singing: false, sleeping: false }
+  readonly gpu = new GpuMeter()
+  readonly modes: ModeService
+  private measurements: VramMeasurement[] = []
+  private measurementTimer: NodeJS.Timeout | null = null
   readonly startedAt: number
 
   private readonly now: () => number
@@ -157,6 +165,8 @@ export class App {
       registry: PluginRegistry
       blocklist: BlockChecker
       words: string[]
+      packs: LoadedMode[]
+      packErrors: { dir: string; error: string }[]
     }
   ) {
     const config = options.config
@@ -228,6 +238,7 @@ export class App {
       persona: () => this.personaText,
       motionTags: () => this.motions?.promptTagList() ?? [],
       resolveMotion: (tag) => this.motions?.pick(tag) ?? null,
+      modePrompts: () => this.modes.prompts(),
       historyMessages: config.llm.history_messages,
       firstCommaMinChars: config.speech.first_comma_min_chars,
       ...(config.llm.temperature !== undefined ? { temperature: config.llm.temperature } : {}),
@@ -252,6 +263,42 @@ export class App {
         ),
     })
     this.pacer = new Pacer(this.router, config.inbox)
+
+    // ── modes
+    for (const e of parts.packErrors) {
+      this.logger('warn', `mode pack skipped: ${path.basename(e.dir)}: ${e.error}`)
+      this.alarms.raise(
+        'mode_pack_invalid',
+        'warn',
+        `mode pack "${path.basename(e.dir)}" was skipped: ${e.error.split(/\r?\n/, 1)[0]}`,
+        path.basename(e.dir)
+      )
+    }
+    // a mode named in the configuration that has no pack is most likely a typo: say so instead of ignoring it
+    const known = new Set(parts.packs.map((p) => p.manifest.id))
+    for (const [id, entry] of Object.entries(config.modes)) {
+      if (entry.enabled && !known.has(id))
+        this.alarms.raise(
+          'mode_unknown',
+          'warn',
+          `modes.${id} is switched on but there is no mode called "${id}" (check the spelling, or the modes folder)`,
+          id
+        )
+    }
+    this.modes = new ModeService({
+      config,
+      packs: parts.packs,
+      registry: this.registry,
+      supervisor: this.supervisor,
+      pluginConfig: (id) => this.config.plugins[id]?.config ?? {},
+      host: this.makeModeHost(),
+      controllers: builtinControllers,
+      gpu: this.gpu,
+      measurements: () => this.measurements,
+      resident: config.vram.resident,
+      log: (level, msg, extra) =>
+        this.logger(level, msg, extra as Record<string, unknown> | undefined),
+    })
 
     this.wire()
   }
@@ -280,7 +327,13 @@ export class App {
     }
     const blockFile = config.sources.bilibili?.blocklist_file
     const blocklist: BlockChecker = blockFile ? Blocklist.fromFile(blockFile) : emptyBlocklist
-    const app = new App(options, { secrets, registry, blocklist, words })
+    const { modes: packs, errors: packErrors } = await loadModePacks(
+      options.modesDirs ?? [
+        path.join(config.root, 'modes'),
+        path.join(config.root, 'config', 'modes'),
+      ]
+    )
+    const app = new App(options, { secrets, registry, blocklist, words, packs, packErrors })
     await app.loadPersona()
     return app
   }
@@ -443,9 +496,9 @@ export class App {
       this.runLog.add('speech', `[${s.emotion}${s.motion ? `+${s.motion.id}` : ''}] ${s.text}`)
     )
     this.brain.on('thinking', (t) => this.logger('debug', `brain: thinking ${t.text.length} chars`))
-    this.brain.on('dance.request', (d) =>
-      this.runLog.add('mode', `the model asked for a dance${d.name ? ` (${d.name})` : ''}`)
-    )
+    this.brain.on('dance.request', (d) => {
+      void this.modes.modelRequest('dance', d.name ? { name: d.name } : {})
+    })
     this.brain.on('motion.unknown', (m) =>
       this.runLog.add('llm', `motion tag "${m.tag}" names no clip`)
     )
@@ -464,6 +517,16 @@ export class App {
         totalMs: s.totalMs,
       })
     })
+
+    // modes
+    const onModeChange = (id: string) => {
+      const view = this.modes.viewOf(id)
+      this.runLog.add('mode', `${id}: ${view.state}`)
+      for (const fn of this.modeListeners) fn(view)
+    }
+    this.modes.on('change', onModeChange)
+    this.modes.on('alarm', (code, message, id) => this.alarms.raise(code, 'error', message, id))
+    this.disposers.push(() => void this.modes.off('change', onModeChange))
 
     // plugins
     const onStatus = (ev: StatusEvent) => {
@@ -657,8 +720,27 @@ export class App {
     this.turnSeen = false
     if (decision.action !== 'send') return
     this.runLog.add('inbox', `to the brain: ${decision.text}`, 'untrusted')
-    void this.brain
-      .respond({ text: decision.text, source: 'viewer', trust: 'untrusted' })
+    void this.send(decision.text, decision.batch)
+  }
+
+  /** The modes may add lines to the prompt of this reply (a dance gift: "you are about to dance"); then the model is asked. */
+  private async send(
+    text: string,
+    batch: Parameters<ModeService['batchExtras']>[0]
+  ): Promise<void> {
+    let extras: string[] = []
+    try {
+      extras = await this.modes.batchExtras(batch)
+    } catch (e) {
+      this.logger('error', `modes: ${(e as Error).message}`)
+    }
+    await this.brain
+      .respond({
+        text,
+        source: 'viewer',
+        trust: 'untrusted',
+        ...(extras.length > 0 ? { extras } : {}),
+      })
       .catch((e) => this.logger('error', `brain: ${(e as Error).message}`))
   }
 
@@ -744,11 +826,96 @@ export class App {
   }
 
   modeViews(): ModeView[] {
-    return []
+    return this.modes.views()
   }
 
-  async modeAction(id: string, _action: ModeAction, _req: ModeRequest): Promise<ModeView> {
-    throw new AppError('unknown_mode', `there is no mode "${id}"`, 404)
+  /** Enter, leave or act on a mode from the console. Entering goes through the mode's own request, so a dance waits for the speech to end. */
+  async modeAction(id: string, action: ModeAction, req: ModeRequest): Promise<ModeView> {
+    if (action === 'exit') return this.modes.exit(id, 'console')
+    if (!this.modes.has(id)) return this.modes.enter(id, req) // says why it cannot be entered
+    // what the mode understands of the details (which dance, tuning numbers) is up to its controller
+    const r = await this.modes.consoleRequest(id, {
+      ...req.params,
+      replace: req.replace,
+      force: req.force,
+    })
+    if (!r.ok) throw new AppError('refused', r.reason ?? 'the mode did not start', 409)
+    return this.modes.viewOf(id)
+  }
+
+  // ───────────────────────────── what a mode may use ─────────────────────────────
+
+  /** True while a reply is being written, queued or spoken. */
+  private busyNow(): boolean {
+    return (
+      this.brain.processing ||
+      this.brain.queued > 0 ||
+      this.director.speaking ||
+      this.director.pending > 0
+    )
+  }
+
+  /** Resolves when nothing has been busy for a moment (so a gap between two sentences does not count), false on timeout. */
+  private async whenQuiet(timeoutMs: number): Promise<boolean> {
+    const deadline = this.now() + timeoutMs
+    let quietFor = 0
+    while (this.now() < deadline && !this.stopped) {
+      quietFor = this.busyNow() ? 0 : quietFor + 1
+      if (quietFor >= 3) return true
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    return false
+  }
+
+  private makeModeHost(): ModeHost {
+    const app = this
+    return {
+      config: this.config,
+      hub: this.stage.hub,
+      motions: this.motions,
+      secrets: this.secrets,
+      flags: this.flags,
+      dataDir: this.config.paths.data_dir,
+      now: () => this.now(),
+      log: (level, msg, extra) => this.logger(level, msg, extra),
+      event: (kind, text, trust) => void this.runLog.add(kind, text, trust),
+      alarm: (code, level, message, subject) =>
+        void this.alarms.raise(code, level, message, subject),
+      clearAlarm: (code, subject) => void this.alarms.clear(code, subject),
+      stopSpeech: (reason) => {
+        this.brain.cancelActive(reason)
+        this.director.cancelAll(reason)
+      },
+      holdSpeech: (reason, on) => this.director.hold(reason, on),
+      say: (o) => this.sayLine(o),
+      whenQuiet: (ms) => this.whenQuiet(ms),
+      busy: () => this.busyNow(),
+      tellBrain: async (text, opts) => {
+        await this.brain.respond({
+          text,
+          source: 'system',
+          trust: 'privileged',
+          ...(opts?.extras ? { extras: opts.extras } : {}),
+          ...(opts?.preempt ? { preempt: true } : {}),
+        })
+      },
+      brainBusy: () => this.brain.processing,
+      serviceUrl: (service) => app.modes.serviceUrl(service),
+      modeState: (id) => app.modes.state(id),
+      enterMode: (id, opts) => app.modes.tryEnter(id, opts),
+      exitMode: async (id, reason) => void (await app.modes.exit(id, reason)),
+      prompt: (modeId, name, vars) => app.modes.prompt(modeId, name, vars),
+    }
+  }
+
+  /** Re-read the probe's measurements (a new one takes effect within half a minute, without a restart). */
+  async reloadMeasurements(): Promise<void> {
+    const { measurements, problems } = await loadMeasurements(
+      path.join(this.config.paths.data_dir, 'vram-measured.json')
+    )
+    this.measurements = measurements
+    if (problems.length > 0) this.alarms.raise('vram_measurements', 'warn', problems[0] as string)
+    else this.alarms.clear('vram_measurements')
   }
 
   /** A secret was written or deleted: whatever was built from it is rebuilt. */
@@ -773,17 +940,28 @@ export class App {
 
   /** Speak a line straight away, no model: it supersedes what is being said. */
   say(req: SayRequest): void {
-    this.brain.cancelActive('say')
-    const turn = this.director.beginTurn(`say-${++this.sayCounter}`)
-    const emotion: Emotion = req.emotion
-    turn.enqueue({
+    this.sayLine({
       text: req.text,
-      emotion,
-      style: req.style ?? emotion,
+      emotion: req.emotion,
+      ...(req.style ? { style: req.style } : {}),
       ...(req.speed !== undefined ? { speed: req.speed } : {}),
     })
+  }
+
+  private sayLine(o: import('../modes/host.ts').SayOptions): void {
+    this.brain.cancelActive('say')
+    const turn = this.director.beginTurn(`say-${++this.sayCounter}`)
+    const emotion: Emotion = o.emotion ?? 'neutral'
+    turn.enqueue({
+      text: o.text,
+      emotion,
+      style: o.style ?? emotion,
+      ...(o.speed !== undefined ? { speed: o.speed } : {}),
+      ...(o.subtitle !== undefined ? { subtitle: o.subtitle } : {}),
+      ...(o.motion !== undefined ? { motion: o.motion } : {}),
+    })
     turn.end()
-    this.runLog.add('speech', `[${emotion}] ${req.text}`, 'privileged')
+    this.runLog.add('speech', `[${emotion}] ${o.text}`, 'privileged')
   }
 
   private fakeUid = 900_000_000
@@ -957,6 +1135,11 @@ export class App {
       )
     }
     await this.reloadLlm()
+    await this.gpu.start()
+    await this.reloadMeasurements()
+    this.measurementTimer = setInterval(() => void this.reloadMeasurements(), 30_000)
+    this.measurementTimer.unref?.()
+    this.modes.attach()
 
     // Services start in the background: a speech server takes a minute to load and must not hold everything up.
     for (const entry of this.registry.enabled(this.config.plugins)) {
@@ -1059,6 +1242,9 @@ export class App {
     this.logger('info', 'animatus stopping')
     if (this.inboxTimer) clearInterval(this.inboxTimer)
     this.brain.cancelActive('shutdown')
+    if (this.measurementTimer) clearInterval(this.measurementTimer)
+    await this.modes.dispose()
+    this.gpu.stop()
     this.director.dispose()
     for (const d of this.disposers.splice(0)) d()
     if (this.stateTimer) await this.flushStageState()

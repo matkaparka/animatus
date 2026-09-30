@@ -71,6 +71,8 @@ interface Slot {
   baselineMb: number | null
   ctl?: AbortController
   neededServices: string[]
+  /** Someone asked to leave while the mode was still starting: giving up is not a failure. */
+  cancelled: boolean
 }
 
 const DEFAULTS = {
@@ -98,6 +100,7 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
         since: Date.now(),
         baselineMb: null,
         neededServices: [],
+        cancelled: false,
       })
     }
   }
@@ -122,6 +125,14 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
   }
 
   exit(id: string, reason = 'requested'): Promise<void> {
+    // Calls are queued, so this exit would wait for a start that is still in progress (a service that takes a
+    // minute to come up, a stage that never answers). Tell that start to give up now; the queued exit then
+    // finds the mode already back at IDLE, or tears it down.
+    const slot = this.slots.get(id)
+    if (slot?.state === 'STARTING') {
+      slot.cancelled = true
+      slot.ctl?.abort()
+    }
     return this.serial(() => this.doExit(id, reason))
   }
 
@@ -192,6 +203,7 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
   private async start(id: string, m: ModeManifest, slot: Slot): Promise<EnterResult> {
     const ctl = new AbortController()
     slot.ctl = ctl
+    slot.cancelled = false
     slot.baselineMb = this.d.vramNow?.() ?? null
     this.setState(id, slot, 'STARTING')
     this.d.mark?.(`enter:${id}`)
@@ -210,6 +222,11 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
         `entering ${id}`
       )
     } catch (e) {
+      if (slot.cancelled) {
+        this.log('info', `mode ${id}: start cancelled`)
+        await this.teardown(id, slot, 'cancelled while starting', false)
+        return { ok: false, code: 'failed', reason: 'cancelled while starting' }
+      }
       const message = (e as Error).message
       this.log('error', `mode ${id} failed to start: ${message}`)
       this.emit('alarm', 'mode_start_failed', `mode ${id} failed to start: ${message}`, id)
@@ -315,14 +332,23 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
     let timer: NodeJS.Timeout | undefined
     const timeout = new Promise<never>((_, rej) => {
       timer = setTimeout(() => {
+        rej(new Error(`timed out ${what} after ${ms} ms`)) // first: it is the reason the abort below is not
         ctl.abort()
-        rej(new Error(`timed out ${what} after ${ms} ms`))
       }, ms)
     })
+    // Aborted from outside (someone asked to leave while starting): stop waiting even if the step ignores the signal.
+    let onAbort: (() => void) | undefined
+    const aborted = new Promise<never>((_, rej) => {
+      onAbort = () => rej(new Error(`aborted ${what}`))
+      if (ctl.signal.aborted) onAbort()
+      else ctl.signal.addEventListener('abort', onAbort, { once: true })
+    })
     try {
-      return await Promise.race([p, timeout])
+      return await Promise.race([p, timeout, aborted])
     } finally {
       clearTimeout(timer)
+      if (onAbort) ctl.signal.removeEventListener('abort', onAbort)
+      aborted.catch(() => undefined)
       p.catch(() => undefined) // a late failure of the abandoned step must not become an unhandled rejection
     }
   }

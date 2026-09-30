@@ -102,9 +102,22 @@ plugins:
   singing:
     enabled: false
 
+# Modes take over the stream for a while. Every mode is off until you switch it on here; the folders under
+# modes/ say which exist, and the console's Modes page shows which of them fit in GPU memory right now.
 modes:
-  sleep: { enabled: true }
-  dance: { enabled: true }
+  dance:
+    enabled: true
+    config:                        # the mode's own settings, all optional (the numbers below are the defaults)
+      cooldown_sec: 180            # after a dance, the next one a viewer or the model asks for waits this long
+      pending_timeout_sec: 90      # a request waits this long for the reply that carried it to be spoken
+      outro_window_sec: 8          # after the dance the model has this long to start its closing line
+      start_timeout_sec: 30        # the stage must report the dance as playing within this long
+
+# The graphics memory modes are admitted against.
+vram:
+  # budget_mb: 12000               # leave out to read the card's size
+  margin_mb: 512                   # kept free for the driver, the desktop and spikes
+  resident: [tts]                  # services that stay loaded whatever the mode
 
 console:
   open_browser: false

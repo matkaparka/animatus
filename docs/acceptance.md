@@ -52,11 +52,51 @@ Evidence so far:
 - **Automated tests** cover the app end to end with a real stage server and a scripted page, including the
   failure paths: model failure, one sentence that cannot be synthesised, stage disconnect, no model provider,
   missing key, speech service warming up, speech service that stops answering.
+- **A 30-minute chat soak through the whole chain.** Forty scripted lines from ten made-up viewers, one every
+  10 to 25 seconds, through router, pacer, the real Gemini model (`gemini-3.5-flash-lite`), real GPT-SoVITS started
+  by the supervisor, and a real Chrome stage window with the 47 MB model. Verdict: **PASS** after 30.8 minutes.
 
-Not yet done:
+  | Check | Limit | Result |
+  |---|---|---|
+  | Audience lines in / model replies | | 100 in (some merged, as designed), 91 replies completed, 0 failed, 0 cancelled |
+  | Sentences spoken | | 270 |
+  | Time to the first visible text | | median 1.7 s, p90 2.6 s |
+  | Speech synthesis per sentence (median) | | 1.5 s |
+  | T-pose frames | 0 | 0 of 242,092 |
+  | Underruns | at most 3 per minute | 0 in 30.8 minutes |
+  | AudioContexts | 1 | 1 |
+  | Stage disconnects / stage alarms | 0 | 0 / none |
+  | Orchestrator memory growth | under 300 MB | +16 MB (100 to 111 MB) |
+  | Stage frame rate | | 104 to 155 fps, JS heap 143 to 174 MB |
 
-- The console wired to the real backend (the server and UI exist and are tested against a fake one).
-- A 30-minute chat soak through the whole chain.
+  One caveat: the very first attempt at a whole-chain run (before the synthesiser was warmed up and before the
+  45-second request timeout and the restart watchdog existed) stalled after its first reply; the speech server
+  was found unhealthy 23 seconds in. It did not reproduce on the following runs, including this one, and its cause
+  is not known. The mitigations are in, and the alarm says so if it happens again.
+- **The console** runs over the real application (`npm start` prints its address once), and is covered by tests
+  of the backend against a real app.
+
+Not yet done: nothing for P2.
+
+## P3: modes
+
+- **The mode framework** (state machine, admission by measured memory, exclusions and priorities, mode packs
+  read from folders, controllers with a narrow host, the console's Modes page) is covered by unit tests of the
+  manager, the admission matrix, the pack loader, the measurement file, the service (views, refusals, prompts,
+  hooks) and the dance controller against a fake host and stage; and end to end through the whole application
+  with a real stage server and a scripted page.
+- **Dance.** End to end: a dance gift gives the model the line "you are about to dance", the reply is spoken, the
+  dance plays with the voice held, the model is told and says a closing line, and chat that arrived meanwhile is
+  answered after it, in that order; the model's own `[motion:dance:name]` tag; the cooldown (prompt and gift
+  answers change, the console is exempt); a stop from the console (no closing line, cooldown starts); a stage that
+  cannot load the dance (alarm with the stage's words, nothing left held); a shutdown mid-dance and one while a dance
+  is waiting for the reply to finish. The tests found four faults that were fixed: a dance that ended by itself was
+  treated as cut short, so the closing line was never said; the saved state could be overwritten by a read that
+  finished late; two writes to the same state file could interleave; and stopping a mode that was still starting
+  waited for the start to time out.
+- **Not yet measured or not yet done:** dance against the real stage window (the stage's own dance code has its
+  own tests and was seen in the P1 run); the other modes (sleep, sing, draw, commentary, game) have no controller
+  yet; the console has no dance list or tuning panel yet (the API for both exists).
 
 ## P0
 

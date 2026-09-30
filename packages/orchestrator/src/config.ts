@@ -182,7 +182,21 @@ const PluginEntry = z.strictObject({
   config: z.record(z.string(), z.unknown()).default({}),
 })
 
-const ModeEntry = z.strictObject({ enabled: z.boolean().default(true) })
+/** A mode is off until the operator switches it on; `config` holds that mode's own settings (its code validates them). */
+const ModeEntry = z.strictObject({
+  enabled: z.boolean().default(false),
+  config: z.record(z.string(), z.unknown()).default({}),
+})
+
+/** Graphics memory the modes are admitted against. */
+const Vram = z.strictObject({
+  /** Dedicated memory of the card in MiB; leave out to read it from nvidia-smi. */
+  budget_mb: z.number().int().min(1024).max(1_000_000).optional(),
+  /** Kept free for the driver, the desktop and spikes. */
+  margin_mb: z.number().int().min(0).max(65536).default(512),
+  /** Services that are always running and count against the budget all the time. */
+  resident: z.array(PluginId).default(['tts']),
+})
 
 const Bilibili = z.strictObject({
   enabled: z.boolean().default(false),
@@ -217,6 +231,7 @@ export const AppConfigSchema = z.strictObject({
   sources: z.strictObject({ bilibili: Bilibili.optional() }).prefault({}),
   plugins: z.record(PluginId, PluginEntry).default({}),
   modes: z.record(PluginId, ModeEntry).default({}),
+  vram: Vram.prefault({}),
   console: Console.prefault({}),
 })
 export type AppConfigInput = z.input<typeof AppConfigSchema>

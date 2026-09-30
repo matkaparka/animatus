@@ -270,6 +270,22 @@ describe('modes', () => {
     expect((await run.call('POST', '/api/modes/dance/enter')).status).toBe(200)
   })
 
+  it('act takes details for the running mode; the details are checked like everything else', async () => {
+    const run = await start()
+    await run.call('POST', '/api/modes/dance/enter', { body: { params: { name: 'aipao' } } })
+    const acted = await run.call('POST', '/api/modes/dance/act', {
+      body: { params: { action: 'tune', speed: 1.2 } },
+    })
+    expect(acted.status).toBe(200)
+    expect(ModeView.parse(acted.json())).toMatchObject({ id: 'dance', state: 'ACTIVE' })
+    const nested = await run.call('POST', '/api/modes/dance/act', {
+      body: { params: { a: { b: 1 } } },
+    })
+    expect(nested.status).toBe(400)
+    expect(errorCode(nested)).toBe('invalid_request')
+    expect((await run.call('POST', '/api/modes/nothing/act')).status).toBe(404)
+  })
+
   it('validates the body, the id and the mode', async () => {
     const run = await start()
     const badType = await run.call('POST', '/api/modes/dance/enter', { body: { replace: 'yes' } })

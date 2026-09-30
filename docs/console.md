@@ -125,7 +125,7 @@ arrays; single resources come back as themselves.
 | `POST /api/plugins/:id/start`, `/stop`, `/restart` | none | `PluginView` after the action |
 | `GET /api/plugins/:id/logs?lines=N` | | `text/plain`, one log line per line; `N` defaults to 200, at most 1000; lines are cut at 4000 characters |
 | `GET /api/modes` | | `{ modes: ModeView[] }` |
-| `POST /api/modes/:id/enter`, `/exit` | optional `ModeRequest` | `ModeView` after the action |
+| `POST /api/modes/:id/enter`, `/exit`, `/act` | optional `ModeRequest`: `replace`, `force`, and `params` (up to 16 string, number or boolean details that the mode's own code understands: which dance, tuning numbers; anything it does not know is ignored) | `ModeView` after the action; a refusal is a 409 whose message says why |
 | `GET /api/secrets` | | `{ secrets: SecretView[] }`: names, `set`, `source` |
 | `PUT /api/secrets/:name` | `SecretPut` | `SecretView` |
 | `DELETE /api/secrets/:name` | | `SecretView` after the delete (an environment variable may still set it) |

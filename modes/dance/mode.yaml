@@ -1,0 +1,15 @@
+manifest_version: 1
+id: dance
+title: Dance
+description: >-
+  Dances to music when a viewer asks (a gift that means "dance", or the model decides to), holds the voice for
+  the length of the dance, then says something afterwards. Dances are the folders under your motions library's
+  dance/ (motion.vrma, music, meta.json); adding one needs no code.
+requires:
+  services: []
+  vram_mb_est: 0
+exclusive_with: [sing]
+priority: 60
+prompt: prompts/active.md
+triggers:
+  events: [model_tag, gift]

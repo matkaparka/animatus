@@ -51,6 +51,17 @@ describe('console API schemas', () => {
     expect(ModeRequest.parse({})).toEqual({ replace: false, force: false })
   })
 
+  it('ModeRequest carries mode-specific details, and only scalars, a bounded few', () => {
+    const ok = ModeRequest.parse({ params: { name: 'aipao', speed: 1.2, trial: true } })
+    expect(ok.params).toEqual({ name: 'aipao', speed: 1.2, trial: true })
+    expect(ModeRequest.safeParse({ params: { nested: { a: 1 } } }).success).toBe(false)
+    expect(ModeRequest.safeParse({ params: { list: [1] } }).success).toBe(false)
+    expect(ModeRequest.safeParse({ params: { text: 'x'.repeat(201) } }).success).toBe(false)
+    const many = Object.fromEntries(Array.from({ length: 17 }, (_, i) => ['k' + i, i]))
+    expect(ModeRequest.safeParse({ params: many }).success).toBe(false)
+    expect(ModeRequest.safeParse({ params: { ['k'.repeat(41)]: 1 } }).success).toBe(false)
+  })
+
   it('StatusView accepts a minimal status', () => {
     const s = StatusView.parse({
       api: 1,
@@ -107,7 +118,7 @@ describe('console API additions', () => {
 
   it('action enums are closed', () => {
     expect(PluginAction.options).toEqual(['start', 'stop', 'restart'])
-    expect(ModeAction.options).toEqual(['enter', 'exit'])
+    expect(ModeAction.options).toEqual(['enter', 'exit', 'act'])
     expect(PluginAction.safeParse('kill').success).toBe(false)
     expect(ModeAction.safeParse('force').success).toBe(false)
   })

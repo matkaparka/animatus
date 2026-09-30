@@ -187,9 +187,16 @@ export const SecretView = z.object({
 })
 export type SecretView = z.infer<typeof SecretView>
 
+/** Details a mode understands (which dance to play, tuning numbers). A mode ignores what it does not know. */
+export const ModeParams = z
+  .record(z.string().min(1).max(40), z.union([z.string().max(200), z.number(), z.boolean()]))
+  .refine((o) => Object.keys(o).length <= 16, 'at most 16 parameters')
+export type ModeParams = z.infer<typeof ModeParams>
+
 export const ModeRequest = z.object({
   replace: z.boolean().default(false),
   force: z.boolean().default(false),
+  params: ModeParams.optional(),
 })
 
 export type ModeRequest = z.infer<typeof ModeRequest>
@@ -198,8 +205,8 @@ export type ModeRequest = z.infer<typeof ModeRequest>
 export const PluginAction = z.enum(['start', 'stop', 'restart'])
 export type PluginAction = z.infer<typeof PluginAction>
 
-/** `POST /api/modes/:id/<action>` */
-export const ModeAction = z.enum(['enter', 'exit'])
+/** `POST /api/modes/:id/<action>`: enter and exit, or `act` (something the running mode understands, for example tuning) */
+export const ModeAction = z.enum(['enter', 'exit', 'act'])
 export type ModeAction = z.infer<typeof ModeAction>
 
 // ─────────────────────────────── live events ───────────────────────────────

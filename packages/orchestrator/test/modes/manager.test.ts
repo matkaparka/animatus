@@ -220,6 +220,48 @@ describe('ModeManager: failures and timeouts', () => {
     expect(alarms).toEqual(['mode_start_failed'])
   })
 
+  it('leaving while the mode is still starting gives up at once, is not an alarm, and releases what was started', async () => {
+    let signalled = false
+    const { mm, log, alarms, controllers } = setup([mode('a', {}, ['forge'])], {
+      startTimeoutMs: 5000,
+    })
+    controllers.a = {
+      enter: (ctx) =>
+        new Promise<void>(() => {
+          ctx.signal.addEventListener('abort', () => (signalled = true))
+        }),
+      exit: async () => void log.push('exit:a'),
+    }
+    const entering = mm.enter('a')
+    await sleep(20)
+    expect(mm.state('a')).toBe('STARTING')
+    const t0 = Date.now()
+    await mm.exit('a', 'user')
+    expect(Date.now() - t0).toBeLessThan(1000) // not the 5 s the start would have been allowed
+    expect(signalled).toBe(true)
+    expect(await entering).toMatchObject({
+      ok: false,
+      code: 'failed',
+      reason: 'cancelled while starting',
+    })
+    expect(mm.state('a')).toBe('IDLE')
+    expect(alarms).toEqual([])
+    expect(log).toContain('release:forge')
+    expect(log).not.toContain('exit:a') // it never got as far as being entered
+  })
+
+  it('a controller that ignores the signal cannot hold up leaving during a start', async () => {
+    const { mm, alarms, controllers } = setup([mode('a')], { startTimeoutMs: 5000 })
+    controllers.a = { enter: () => new Promise<void>(() => {}), exit: async () => {} }
+    void mm.enter('a')
+    await sleep(20)
+    const t0 = Date.now()
+    await mm.exitAll('shutdown')
+    expect(Date.now() - t0).toBeLessThan(1000)
+    expect(mm.state('a')).toBe('IDLE')
+    expect(alarms).toEqual([])
+  })
+
   it('a stop that hangs still ends in IDLE, with an alarm', async () => {
     const { mm, alarms, controllers } = setup([mode('a')], { stopTimeoutMs: 40 })
     await mm.enter('a')

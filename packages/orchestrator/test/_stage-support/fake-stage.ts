@@ -18,6 +18,8 @@ export interface FakeStageOptions {
   /** `dance.state` idle reason. Default 'finished'. */
   danceReason?: 'finished' | 'error' | 'stopped'
   danceMs?: number
+  /** Like a real stage whose motion file cannot be loaded: error straight after 'loading', never 'playing'. */
+  danceFailsToLoad?: boolean
   /** Fields merged into every `stats` report. */
   stats?: Record<string, number>
   /** false: never send stats. */
@@ -40,6 +42,10 @@ export class FakeStage {
   readonly audio = new Map<string, Uint8Array>()
   readonly cancels: Json[] = []
   readonly dances: Json[] = []
+  readonly danceStops: Json[] = []
+  readonly danceTunes: Json[] = []
+  private danceEnd: NodeJS.Timeout | null = null
+  private danceId: string | null = null
   ended = 0
   private readonly pending = new Map<number, Pending>()
   private readonly timers = new Set<NodeJS.Timeout>()
@@ -90,12 +96,13 @@ export class FakeStage {
     this.timers.clear()
   }
 
-  private later(ms: number, fn: () => void): void {
+  private later(ms: number, fn: () => void): NodeJS.Timeout {
     const timer = setTimeout(() => {
       this.timers.delete(timer)
       if (this.stage.ws.readyState === 1) fn()
     }, ms)
     this.timers.add(timer)
+    return timer
   }
 
   private send(msg: unknown): void {
@@ -135,6 +142,11 @@ export class FakeStage {
         return
       case 'dance.play':
         return this.onDance(msg)
+      case 'dance.stop':
+        return this.onDanceStop(msg)
+      case 'dance.tune':
+        this.danceTunes.push(msg)
+        return
       default:
         return
     }
@@ -210,8 +222,21 @@ export class FakeStage {
     const id = msg.dance_id as string
     const reason = this.opts.danceReason ?? 'finished'
     this.send({ type: 'dance.state', dance_id: id, phase: 'loading' })
+    if (this.opts.danceFailsToLoad) {
+      this.later(5, () =>
+        this.send({
+          type: 'dance.state',
+          dance_id: id,
+          phase: 'idle',
+          reason: 'error',
+          error: 'the fake dance failed',
+        })
+      )
+      return
+    }
     this.later(5, () => this.send({ type: 'dance.state', dance_id: id, phase: 'playing' }))
-    this.later(this.opts.danceMs ?? 50, () =>
+    this.danceEnd = this.later(this.opts.danceMs ?? 50, () => {
+      this.danceEnd = null
       this.send({
         type: 'dance.state',
         dance_id: id,
@@ -219,6 +244,17 @@ export class FakeStage {
         reason,
         ...(reason === 'error' ? { error: 'the fake dance failed' } : {}),
       })
-    )
+    })
+    this.danceId = id
+  }
+
+  /** Like the real stage: a stop ends the running dance at once and it reports itself stopped. */
+  private onDanceStop(msg: Json): void {
+    this.danceStops.push(msg)
+    if (!this.danceEnd || !this.danceId) return
+    clearTimeout(this.danceEnd)
+    this.timers.delete(this.danceEnd)
+    this.danceEnd = null
+    this.send({ type: 'dance.state', dance_id: this.danceId, phase: 'idle', reason: 'stopped' })
   }
 }

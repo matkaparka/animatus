@@ -284,6 +284,7 @@ export class FakeBackend implements ConsoleBackend {
       if (mode.state !== 'IDLE') this.setMode(id, 'IDLE')
       return clone(this.modes.get(id) as ModeView)
     }
+    if (action === 'act') return clone(mode) // what a mode does with details is the mode's business
     if (mode.state === 'ACTIVE') return clone(mode)
 
     const active = [...this.modes.values()].filter(
