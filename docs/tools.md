@@ -70,8 +70,15 @@ Other ways a message reaches the model are untrusted unless the program says oth
 
 ## What the model is told
 
+The model cannot tell a moderator's line from a viewer's in the text, and must not be able to (a marker in the text
+could be typed by anyone). So when a reply answers staff only, the program says so in the system prompt, from the
+platform's own flags: "the message below comes from a room moderator" (or "from the streamer"). It names no one: a
+name is chosen by a person and does not belong in a system prompt. An audience reply, or one with any audience line
+in it, gets no such note.
+
 Each reply's prompt lists only the tools a call from that reply could get anywhere with (an audience reply is told
-of the free ones only) and how to ask: a fenced block whose language word is `tool`, with one JSON object.
+of the free ones only; `enter_mode` and `exit_mode` are left out when no mode is switched on, and name the modes
+that are) and how to ask: a fenced block whose language word is `tool`, with one JSON object.
 
 ````
 ```tool

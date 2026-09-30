@@ -26,6 +26,8 @@ export interface ToolSpec<A = unknown> {
    * memory) has `approval` here: the operator can switch it off, never make it free.
    */
   floor?: 'free' | 'approval'
+  /** False when the tool has nothing to work on right now (no mode is switched on): it is then left out of the prompt. */
+  available?(): boolean
   /** Checked before anything else, even before a call is queued, so that garbage never reaches the streamer. */
   schema: z.ZodType<A>
   /** What it will do with these arguments, one line, written by the tool: shown in the approval. */

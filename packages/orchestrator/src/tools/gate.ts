@@ -104,6 +104,7 @@ export class ToolGate extends EventEmitter<Events> {
   /** The tools a call with this trust could get somewhere with, for telling the model which ones it has. */
   usableBy(trust: EventSource['trust']): ToolSpec[] {
     return this.o.registry.list().filter((spec) => {
+      if (spec.available?.() === false) return false
       const tier = effectiveTier(spec, this.o.tiers?.[spec.name])
       return decideTool(tier, trust).action !== 'reject'
     })

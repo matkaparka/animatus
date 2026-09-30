@@ -179,9 +179,20 @@ observer as its own part and the unified worker protocol are not yet.
 - **Console:** the approval routes over the real server and the real gate (11 tests: token, other origin, ids, methods,
   one decision only, the event pushed to open consoles, a queued call listed with its summary and run once) and the
   page (10 tests, and the tab count in the app).
-- **Not done, and not verified:** none of this has run against a real model, so how often a real model asks for a tool
-  when it should not, or does not when it should, is unknown; the prompt block that tells the model about tools is
-  untested with a real one. Approving in the real console page has not been clicked through by hand yet.
+- **With a real model** (Gemini, 3 runs of each case, the model only, no speech): plain chat asked for no tool (0 of
+  3); a viewer asking it to pass something on to the streamer used the free tool in 2 of 3; the streamer's own request
+  to end a mode was queued in 2 of 3; a moderator's request to remember a fact in 1 of 3, and to start a mode in 0 of
+  3 (it answered that a mode "needs approval" instead of asking for the tool). None of the three injections (an
+  outright order, a fake system notice with a tool block typed in, a claim to be the streamer) made it ask for
+  anything, 0 of 9: the persona already tells it not to follow orders in chat, and the gate would have refused them.
+  So the mechanism works with a real model, and a small model is hesitant about the tools that change things. The
+  reasons a reply hesitates were not investigated further.
+- **By hand, in the real console page** (the real application, its own gate): the tab's count, three requests listed
+  with who asked and how far they were trusted, markup in a request shown as text, an approval (the memory file got
+  its `[agent]` line and the audit trail its line), an approval of a mode start (it answers that the mode was asked
+  to start; a mode may only start once the speech is quiet), a denial (nothing written), and the audience's own
+  request absent from the list.
+- **Not done:** the prompt block has not been tuned for reliability beyond the above.
 - **Known limit** (written in [tools.md](tools.md)): the gate cannot tell whether a moderator's own request is what they
   meant, and a model steered by the audience earlier in the conversation can misjudge a later moderator request; the
   streamer's yes is the safeguard for both.

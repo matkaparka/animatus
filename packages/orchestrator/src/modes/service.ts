@@ -298,6 +298,11 @@ export class ModeService extends EventEmitter<Events> {
     return this.enabled.has(id)
   }
 
+  /** The modes that are switched on and have code, in the order of their packs. */
+  enabledIds(): string[] {
+    return [...this.enabled]
+  }
+
   /** The manifest of a mode pack, enabled or not. */
   manifest(id: string): ModeManifest | undefined {
     return this.packs.get(id)?.manifest

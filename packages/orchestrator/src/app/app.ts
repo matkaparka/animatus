@@ -415,6 +415,7 @@ export class App {
         : {}),
       modes: {
         has: (id) => this.modes.has(id),
+        ids: () => this.modes.enabledIds(),
         enter: async (id) => {
           const v = await this.modeAction(id, 'enter', { replace: false, force: false })
           // a mode may start only once the speech is quiet, so "not yet" is a fair answer
@@ -886,6 +887,8 @@ export class App {
     const viewers = this.recordBatch(batch)
     // the reply is judged by its least trusted line: what the audience wrote among a moderator's lines makes it an audience reply
     const origin = originOfBatch(batch.parts)
+    const staff = staffNote(origin)
+    if (staff) extras = [...extras, staff]
     await this.brain
       .respond({
         text,
@@ -1598,6 +1601,19 @@ function describeLlmError(e: Error): string {
 /** First line of an error's message, for log lines that must stay one line. */
 const firstLine = (e: unknown): string =>
   (e instanceof Error ? e.message : String(e)).split(/\r?\n/, 1)[0] ?? ''
+
+/**
+ * A note for the system prompt when a reply answers staff only. The model cannot tell a moderator's line from a
+ * viewer's in the text (and must not be able to: a marker in the text could be typed by anyone), so the program says it
+ * here, from the platform's own flags. It names no one: a name is chosen by a person and does not belong in a system prompt.
+ */
+function staffNote(origin: EventSource): string | null {
+  if (origin.kind === 'moderator')
+    return 'The message below comes from a room moderator: staff, not the audience. When they ask for something a tool can do, ask for that tool (the streamer still has to say yes).'
+  if (origin.kind === 'host')
+    return 'The message below comes from the streamer, in their own chat. When they ask for something a tool can do, ask for that tool (they still have to say yes in the console).'
+  return null
+}
 
 /**
  * What the model is told next turn about a decision of the tool gate. A refusal says only that it was refused and, for

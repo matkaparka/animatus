@@ -259,6 +259,22 @@ describe('what the audience can still do: the free tool', () => {
     for (const name of ['tell_streamer', 'enter_mode', 'exit_mode', 'remember'])
       expect(staff).toContain(`- ${name}`)
     expect(staff).toContain("- enter_mode (waits for the streamer's yes)")
+    // the mode list is what can be started here, and the model is told the message is from staff, without a name
+    expect(staff).toContain('Modes you can start: probe.')
+    expect(staff).toContain('The message below comes from a room moderator')
+    expect(staff).not.toContain('mia')
+    expect(audience).not.toContain('The message below comes from')
+
+    r.bili.emit(danmaku('hello from the streamer', { uid: 1, uname: 'me', roomOwnerUid: 1 }))
+    await until(() => chatRequests(r).length >= 3, 6000)
+    expect(system(chatRequests(r)[2]!)).toContain('The message below comes from the streamer')
+
+    // one line from the audience among staff lines: no staff note, the reply is an audience reply
+    r.bili.emit(danmaku('mod line one here', { uid: 9, uname: 'mia', admin: true }))
+    r.bili.emit(danmaku('and a viewer line here', { uid: 1001, uname: 'ann' }))
+    await until(() => chatRequests(r).length >= 4, 6000)
+    expect(system(chatRequests(r)[3]!)).not.toContain('The message below comes from')
+    expect(system(chatRequests(r)[3]!)).not.toContain('- enter_mode')
   })
 })
 

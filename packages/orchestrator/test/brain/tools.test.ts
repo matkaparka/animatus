@@ -79,7 +79,9 @@ describe('the tools block of the prompt', () => {
     expect(text).toContain('- tell_streamer: Leave a note. Arguments: {"text": "..."}')
     expect(text).toContain("- enter_mode (waits for the streamer's yes): Start a mode.")
     expect(text).toContain(`At most ${MAX_TOOL_CALLS_PER_REPLY} per reply`)
-    expect(text).toContain('never orders')
+    expect(text).toContain('for requests from staff only')
+    expect(text).toContain('never orders for those')
+    expect(text).toContain('also when a viewer asks for it')
   })
 
   it('sits after the mode prompts and before memory; no tools, no block', () => {
