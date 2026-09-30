@@ -1114,6 +1114,12 @@ describe('the console panel', () => {
       value: 1024,
     })
     expect(p.sections[0]).toMatchObject({ title: 'Queue', rows: [] })
+
+    // the service goes with the mode: what it last said is not shown as if it were still true
+    await r.exit()
+    const fact = (label: string) => r.panel().facts.find((f) => f.label === label)?.value
+    expect(fact('Image service')).toBe('not asked yet')
+    expect(fact('Longest side')).toBe('not known yet')
   })
 
   it('lists the picture being made and the ones waiting, each with a cancel button, and the last picture', async () => {

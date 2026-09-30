@@ -63,9 +63,8 @@ const NAME_IN_PROMPT_CHARS = 24
 const MAX_PENDING_LINES = 3
 
 export interface DrawDeps {
-  /** For tests. */
+  /** What the image service is called with; for tests. */
   fetch?: typeof fetch
-  random?: () => number
 }
 
 export interface DrawStatus {
@@ -96,7 +95,6 @@ interface Running {
 }
 
 interface Picture {
-  file: string
   url: string
   thumb: { mime: string; base64: string }
   self: boolean
@@ -124,7 +122,6 @@ export function createDrawController(
   submit(who: { uid: number; uname: string; owner: boolean }, text: string): DrawSubmit
 } {
   const cfg = parseDrawSettings(host.config.modes.draw?.config, host.config.root)
-  const random = deps.random ?? Math.random
   const blocklist = new DrawBlocklist(cfg.blocklist_paths, () => host.now())
   const planner = createPlanner(host, cfg)
   const cooldowns = new Cooldowns(
@@ -221,7 +218,7 @@ export function createDrawController(
   // ─────────────────────────────── what the character says ───────────────────────────────
 
   const sayLine = (file: 'refusals' | 'errors'): void => {
-    const line = pickLine(parseLines(prompt(file)), random)
+    const line = pickLine(parseLines(prompt(file)))
     if (line) host.say({ text: line.text, emotion: line.emotion })
   }
 
@@ -367,7 +364,6 @@ export function createDrawController(
       return {
         kind: 'ok',
         picture: {
-          file,
           url: host.assetUrl('generated', file),
           thumb: drawn.thumb_b64
             ? { mime: 'image/jpeg', base64: drawn.thumb_b64 }
@@ -586,6 +582,8 @@ export function createDrawController(
       if (healthTimer) clearInterval(healthTimer)
       showTimer = healthTimer = null
       catalog = null
+      lastHealth = null // the service goes with the mode: what it last said is no longer true
+      healthProblem = null
       frame = { kind: 'idle' }
       send({ kind: 'hidden' })
       host.clearAlarm('draw_failed', 'draw')
