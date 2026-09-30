@@ -100,6 +100,8 @@ async function rig(
     enter?: boolean
     /** Files whose prompt the pack "lacks". */
     withoutPrompt?: string[]
+    /** What the controller calls the image service with. */
+    fetch?: typeof fetch
   } = {}
 ): Promise<Rig> {
   const dir = opts.dir ?? (await mkdtemp(path.join(tmpdir(), 'animatus-draw-')))
@@ -199,7 +201,9 @@ async function rig(
     },
     pluginConfig: (id) => config.plugins[id]?.config ?? {},
     host,
-    controllers: { draw: (h) => (ctl = createDrawController(h)) },
+    controllers: {
+      draw: (h) => (ctl = createDrawController(h, opts.fetch ? { fetch: opts.fetch } : {})),
+    },
     gpu: { usedMb: () => null, totalMb: () => 12000 },
     measurements: () => [],
     resident: [],
@@ -995,19 +999,52 @@ describe('stopping', () => {
     expect(r.alarms).toEqual([])
   })
 
-  it('what waits in the queue is dropped, and never drawn', async () => {
-    const r = await rig({ config: { cooldown_sec: 0 } })
+  it('what waits in the queue is dropped, never drawn, and those viewers keep their turn', async () => {
+    const r = await rig()
     const held = gate()
     r.forge.generate = async () => (await held.wait, okPicture())
     r.chat('画 一', { uid: 1 })
     await until(() => r.forge.generateCalls().length === 1)
     r.chat('画 二', { uid: 2 })
     r.chat('画 三', { uid: 3 })
+    expect(r.panel().sections[0]!.rows).toHaveLength(3)
     await r.exit()
     held.open()
     await pause(100)
     expect(r.forge.generateCalls()).toHaveLength(1)
     expect(r.told).toEqual([])
+    expect(r.panel().sections[0]!.rows).toEqual([])
+    expect(r.ctl.status().queue).toBe(0)
+
+    // nobody got a picture, so nobody is made to wait for one
+    r.forge.generate = () => okPicture()
+    await r.enter()
+    for (const uid of [1, 2, 3]) r.chat(`画 又${uid}`, { uid })
+    await until(() => r.told.length === 3, 8000, 'three pictures')
+  })
+
+  it('while the image service takes no notice of being stopped and answers late: nothing is kept', async () => {
+    const held = gate()
+    const late = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith('/generate')) {
+        await held.wait // ignores the signal, as a service that is slow to notice would
+        return new Response(JSON.stringify(okPicture().body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return fetch(url, init)
+    }) as typeof fetch
+    const r = await rig({ fetch: late })
+    r.chat('画 一条龙')
+    await until(() => r.llm.calls.length === 2)
+    await until(() => r.ctl.status().frame === 'generating')
+    await r.exit()
+    held.open()
+    await pause(120)
+    expect(await pictureFiles(r)).toEqual([])
+    expect(r.told).toEqual([])
+    expect(r.frames().at(-1)).toMatchObject({ visible: false })
   })
 
   it('a shutdown in the middle of a picture is prompt and leaves nothing behind', async () => {
