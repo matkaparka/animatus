@@ -30,7 +30,7 @@ modes:
     config:                  # all optional; the numbers are the defaults
       window: "exe:javaw.exe"   # the window to watch until you pick one on the panel (see "Naming a window")
       interval_sec: 8
-      language: English         # the language of game names, notes and the story (what she says comes from the persona)
+      language: English         # the language of game names, notes and the story (what the character says comes from the persona)
 ```
 
 The program starts every enabled plugin when it starts. Entering the mode starts the capture service if it is not
@@ -102,10 +102,12 @@ a picture.
 | `interval` | The operator's interval from the panel, or null |
 
 - **Game.** Below `confidence_min` the game is "not sure": the prompt says so, and the next picture is used to
-  identify it again. A "not sure" answer never wipes a game that was sure, except when the operator asked or a
-  switch was noticed (then the old game stays on record only to tell a return from a change). The same game under a
-  slightly different name is the same game (case, spacing and punctuation are ignored); "Civilization VI" and
-  "Civilization VII" are not, and the identification question carries the earlier name so the model keeps using it.
+  identify it again. When the periodic check (`reidentify_minutes`) finds nothing better than what is known (a
+  loading screen, say) everything stays as it was. When the answer to a switch or to the operator's request is "not
+  sure", the game is "not sure" at once (it is probably not the same any more); its name only stays on record to tell
+  a return from a change. The same game under a slightly different name is the same game (case, spacing and
+  punctuation are ignored); "Civilization VI" and "Civilization VII" are not, and the identification question carries
+  the earlier name so the model keeps using it.
 - **Another game** (a sure identification with another name) drops the story and the notes: they are about
   something else.
 - **Story.** Written in the background from the notes and the earlier story; a failure keeps the notes and tries again
@@ -305,6 +307,22 @@ A file the controller needs and the pack lacks stops the mode from starting, wit
 | `seen.md`, `progress.md` | The value of `seen` (what was last seen) and of `progress` (the story) | `scene`, `summary` |
 | `round.md` | The line that asks for a comment (a system message with the picture) | none |
 | `identify.md`, `analyze.md`, `summarize.md` | The mode's own model questions | `game`, `scene`, `language`; `summary`, `scenes`, `limit` |
+
+## What is different from the old setup
+
+- The picture comes from a capture service that looks at one window, not from a screen share into the page; the page
+  never captures anything.
+- One reply with `[scene]` and `[switch]` lines became two model calls (see above); the switch is a field of the
+  reading call, the scene a note in the memory.
+- Viewers are not answered by cutting a comment off: a comment is never started while a viewer's reply is under way,
+  and one that is ready when a viewer starts is dropped. The old page also stopped a comment that was being spoken.
+- The reading of the screen while the character talks (the old "background analysis", off by default) is gone;
+  `analysis_every` is what remains of it.
+- The memory now survives a restart of the program (the old one, of the page, was lost on a page reload); it is still
+  cleared only by the operator. The story is made from the notes on the screen, not from the comments, because the
+  mode does not see what was said.
+- The shortcuts for "identify again" and for the mode became panel buttons; the mode lists `ctrl+alt+g`.
+- Nothing is drawn as the background of the stage; the game is composed in the streaming software.
 
 ## Limits and things to know
 

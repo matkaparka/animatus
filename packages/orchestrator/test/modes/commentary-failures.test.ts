@@ -4,7 +4,6 @@
  * incomplete; the modes it excludes.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { AppError } from '../../src/app/errors.ts'
 import { createCommentaryController } from '../../src/modes/controllers/commentary.ts'
 import { ConfigError } from '../../src/config.ts'
 import { jpegBase64, notFound, win } from './fakeCapture.ts'
