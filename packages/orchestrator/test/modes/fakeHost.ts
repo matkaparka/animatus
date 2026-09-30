@@ -190,6 +190,7 @@ export async function fakeHost(opts: FakeHostOptions = {}): Promise<FakeHost> {
     tellBrain: async (text, o) => {
       f.told.push({ text, opts: o })
       if (f.brain.failTell) throw new Error('the model is away')
+      return { status: 'done', sentences: 1 }
     },
     brainBusy: () => f.brain.busy,
     serviceUrl: (service) => opts.services?.[service] ?? null,

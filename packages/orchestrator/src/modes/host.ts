@@ -85,7 +85,7 @@ export interface ModeHost {
       /** The text is the program's own words, nobody else's. */
       fromProgram?: boolean
     }
-  ): Promise<void>
+  ): Promise<TellResult>
   /** True while the brain is writing a reply. */
   brainBusy(): boolean
 
@@ -181,6 +181,17 @@ export interface ChatCommand extends ChatCommandInput {
   prefix: string
   /** What follows the command word, trimmed; may be empty. */
   argument: string
+}
+
+/**
+ * How the model's answer to `tellBrain` ended: `done` (written, though the speech may still be playing), `failed`
+ * (the model could not answer; nothing was invented in its place), `cancelled` (something cut it off, another mode or
+ * the operator). `sentences` is how many were handed to the voice; `error` says why a reply failed, in a few words.
+ */
+export interface TellResult {
+  status: 'done' | 'failed' | 'cancelled'
+  sentences: number
+  error?: string
 }
 
 export type ModeControllerFull = ModeController & ModeControllerHooks

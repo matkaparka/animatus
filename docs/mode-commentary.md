@@ -35,7 +35,9 @@ modes:
 
 The program starts every enabled plugin when it starts. Entering the mode starts the capture service if it is not
 running; leaving the mode stops it (and the window list on the panel is then empty until it runs again: start it on
-the Plugins page to see the windows before you enter the mode). The console's Modes page has the Enter and Exit
+the Plugins page to see the windows before you enter the mode). To have the list filled all the time, keep the service
+running: the capture service uses no graphics memory, so list it among the always-running services,
+`vram: { resident: [tts, screencap] }`, and it is neither stopped when the mode ends nor counted against the budget. The console's Modes page has the Enter and Exit
 buttons and the panel described below. The manifest lists `ctrl+alt+g` as the mode's shortcut, which is what the old
 setup used; it is shown on the Modes page.
 

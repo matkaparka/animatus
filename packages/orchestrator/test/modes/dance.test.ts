@@ -167,6 +167,7 @@ async function rig(
     tellBrain: async (text) => {
       told.push(text)
       if (brain.tellFails) throw new Error('the model is away')
+      return { status: 'done', sentences: 1 }
     },
     brainBusy: () => brain.busy,
     serviceUrl: () => null,

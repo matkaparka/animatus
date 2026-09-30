@@ -419,6 +419,29 @@ describe('what a mode can use of the program', () => {
     return { r, songs, host: () => host }
   }
 
+  it('tells the mode how the model’s answer ended: done with the sentences spoken, failed with why, cancelled when cut off', async () => {
+    const { r, host } = await probeRig()
+    await r.connect()
+    await until(() => r.app.stage.hub.connected, 3000, 'the stage')
+    r.llm.reply = () => ['[happy]Hello there. [neutral]And a second sentence.']
+    expect(await host().tellBrain('say hello')).toEqual({ status: 'done', sentences: 2 })
+
+    r.llm.reply = () => [new Error('the provider is away')]
+    const failed = await host().tellBrain('say hello again')
+    expect(failed).toMatchObject({ status: 'failed', sentences: 0, error: 'the provider is away' })
+    expect(failed.error?.includes(String.fromCharCode(10))).toBe(false)
+
+    r.llm.reply = () => [
+      '[neutral]A long answer that gets cut. ',
+      '[neutral]More. ',
+      '[neutral]More. ',
+    ]
+    const pending = host().tellBrain('say something long')
+    await until(() => r.app.brain.processing, 3000, 'the reply to start')
+    r.app.brain.cancelActive('test')
+    expect((await pending).status).toBe('cancelled')
+  })
+
   it('asks the model a plain question, through the same providers, counted under the tag', async () => {
     const { r, host } = await probeRig()
     r.llm.reply = () => ['{"pick":', ' 2}']

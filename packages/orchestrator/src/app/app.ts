@@ -1126,7 +1126,7 @@ export class App {
       whenQuiet: (ms) => this.whenQuiet(ms),
       busy: () => this.busyNow(),
       tellBrain: async (text, opts) => {
-        await this.brain.respond({
+        const summary = await this.brain.respond({
           text,
           source: 'system',
           // untrusted unless the mode says the text is the program's own words (see ModeHost.tellBrain)
@@ -1135,6 +1135,11 @@ export class App {
           ...(opts?.images ? { images: opts.images } : {}),
           ...(opts?.preempt ? { preempt: true } : {}),
         })
+        return {
+          status: summary.status,
+          sentences: summary.sentences,
+          ...(summary.error ? { error: firstLine(summary.error) } : {}),
+        }
       },
       brainBusy: () => this.brain.processing,
       serviceUrl: (service) => app.modes.serviceUrl(service),

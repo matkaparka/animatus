@@ -221,6 +221,7 @@ export async function commentaryRig(opts: RigOptions = {}): Promise<Rig> {
     f.told.push({ text, opts: o })
     if (f.brain.failTell) throw new Error('the model is away')
     if (gates.tell) await gates.tell
+    return { status: 'done', sentences: 1 }
   }
   f.host.llmText = async (req) => {
     f.llm.requests.push(req)

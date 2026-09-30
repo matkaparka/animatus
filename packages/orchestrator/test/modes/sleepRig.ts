@@ -235,7 +235,7 @@ export async function rig(opts: RigOpts = {}): Promise<Rig> {
       return speech.answer
     },
     busy: () => speech.busy,
-    tellBrain: async () => {},
+    tellBrain: async () => ({ status: 'done', sentences: 1 }),
     brainBusy: () => false,
     serviceUrl: () => null,
     modeState: (id) => service.state(id),
