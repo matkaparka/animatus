@@ -3,10 +3,12 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse as parseYaml } from 'yaml'
 import { ModePanel, StageDownstream } from '@animatus/protocol'
 import { parseConfig } from '../../src/config.ts'
 import type { AppConfigInput } from '../../src/config.ts'
 import { FORMATS } from '../../src/inbox/formats.ts'
+import { defaultInboxConfig } from '../../src/inbox/types.ts'
 import { SleepSettings, createSleepController } from '../../src/modes/controllers/sleep.ts'
 import type { SleepDeps } from '../../src/modes/controllers/sleep.ts'
 import type { TrackFile } from '../../src/modes/controllers/sleepTracks.ts'
@@ -1259,6 +1261,19 @@ describe('settings', () => {
       captions: true,
       whisper_style: 'whisper',
     })
+  })
+
+  it('the configuration in the doc is valid, and the numbers it shows for the mode are the defaults', async () => {
+    const doc = await readFile(path.resolve(MODES, '..', 'docs', 'mode-sleep.md'), 'utf8')
+    const block = /```yaml\n([\s\S]*?)```/.exec(doc)?.[1]
+    expect(block).toBeTruthy()
+    const config = parseConfig(parseYaml(block as string), { root: '/x' })
+    expect(SleepSettings.parse(config.modes.sleep?.config)).toEqual(SleepSettings.parse({}))
+    expect(config.modes.sleep?.enabled).toBe(true)
+    // what the doc says about the pacer's side is what the inbox defaults are
+    expect(config.inbox.sleep).toEqual(defaultInboxConfig().sleep)
+    expect(config.tts.styles).toHaveProperty('whisper')
+    expect(config.stage.presets.backgrounds).toHaveProperty('night')
   })
 
   it('reject what is out of bounds or unknown, at start-up, with a message that names the setting', async () => {
