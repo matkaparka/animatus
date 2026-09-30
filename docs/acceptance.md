@@ -171,8 +171,8 @@ Not yet done: nothing for P2.
   new district"). A directive sent from the panel reached the agent and was logged as sent from the console. A
   viewer's suggestion that went against that plan was declined in the character's own words, with no tool call; a
   second suggestion (send someone to explore) was taken up: the model wrote a `game_command` block, the gate ran it
-  as a free tool for an untrusted viewer, the audit trail has the line (origin viewer, decision ran), and the demo's
-  next events show the exploration. Killing the demo worker's process: the supervisor restarted it in 1 s, the panel
+  as a free tool for an untrusted viewer, the audit trail has the line (origin viewer, decision ran), and the character's next comments speak of
+  the exploration under way. Killing the demo worker's process: the supervisor restarted it in 1 s, the panel
   said the agent did not answer and then that it did, the mode noticed the new epoch, resumed the agent, and the
   character said the game had reset to turn 2. Leaving the mode paused the agent and stopped the plugin.
 - **A bug that run found, fixed:** leaving the mode took 21 s and raised an error alarm ("GPU memory is 3254 MiB, above
