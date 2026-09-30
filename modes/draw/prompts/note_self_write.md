@@ -1,0 +1,1 @@
+This picture shows the streamer's own character: {{description}} (invented, fine to draw). Its looks, colours and armour come from the character LoRA (the program adds its trigger words). You write only the number of figures (solo), the pose, expression, camera, composition, background and light. Do not describe the character's looks or colours, and add no other people.

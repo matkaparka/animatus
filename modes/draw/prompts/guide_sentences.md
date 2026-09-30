@@ -1,0 +1,1 @@
+A model that understands natural language. Write one paragraph of 60 to 150 English words in full sentences: who or what is drawn, looks and build, clothes, action and expression, the scene, the light, and the camera (framing, lens, photographic style). No tag lists and no weight brackets.

@@ -1,0 +1,1 @@
+The viewer wants a picture of the streamer's own character: {{description}}. That character is invented and may be drawn. The program has fixed the model and the character LoRA: write that model's name in "checkpoint" and leave "loras" empty.

@@ -1,0 +1,22 @@
+manifest_version: 1
+id: draw
+title: Draw on request
+description: >-
+  Viewers write the command word and what they want in chat; the program plans a prompt, draws the picture on your
+  Forge server under a strict safe-for-work policy, shows it in a frame on the stage, and the character comments on it.
+  Needs the forge plugin (plugins/forge) and a Forge server started with --api.
+requires:
+  services: [forge]
+  vram_mb_est: null
+exclusive_with: [sing, game, sleep, commentary]
+priority: 50
+prompt: prompts/active.md
+triggers:
+  hotkey: ctrl+alt+p
+  danmaku_prefix: ["画", "/画"]
+stage:
+  # The character steps to the right and gets smaller; the frame takes the left. Percent of the window. Tune them here,
+  # or put a mode.yaml of the same name in config/modes/draw/ (or use a named preset from stage.presets.layouts).
+  layout:
+    char: { x: 0, y: 0, scale: 0.5 }
+    frame: { left: 3, top: 12, width: 56, height: 78 }
