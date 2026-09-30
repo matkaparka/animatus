@@ -72,9 +72,10 @@ export interface SleepStatus {
   tracks: number
 }
 
-/** What a test may replace: reading the folder, and the dice. */
+/** What a test may replace: reading the folder, reading the saved state (real disk I/O has no place under fake timers), and the dice. */
 export interface SleepDeps {
   scan?: (dir: string) => Promise<TrackScan>
+  readState?: () => Promise<unknown>
   random?: () => number
 }
 
@@ -254,7 +255,7 @@ export function createSleepController(
   /** Reads the saved state once; every caller waits for the same read, so nothing runs on half-loaded state. */
   const load = (): Promise<void> =>
     (loading ??= (async () => {
-      const raw = await readJson<unknown>(stateFile, {})
+      const raw = await (deps.readState?.() ?? readJson<unknown>(stateFile, {}))
       const v = isObject(raw) ? raw.last_track : undefined
       lastTrack = typeof v === 'string' && v !== '' && v.length <= 120 ? v : null
     })())
@@ -753,6 +754,7 @@ export function createSleepController(
         phase: r?.phase ?? null,
         connected: host.hub.connected,
         currentKey: r?.current?.key ?? null,
+        upcoming: r?.queue.map((t) => t.key) ?? [],
         lastError: r?.lastError ?? null,
         tracks: tracks.map((t) => ({
           key: t.key,
@@ -809,6 +811,30 @@ export function createSleepController(
           if (tracks.length === 0) return refuse('there are no tracks')
           queueJump(run, 'next')
           return { ok: true }
+        case 'skip': {
+          // the button of a row names the track in `row`; without a name it is the one that is playing
+          const r = run
+          if (!r) return refuse('sleep mode is not running')
+          if (r.idle !== null) return refuse('nothing is playing')
+          const name =
+            typeof req.row === 'string' ? req.row : typeof req.track === 'string' ? req.track : null
+          const track = name === null ? r.current : find(name)
+          if (!track)
+            return refuse(
+              name === null ? 'nothing is playing' : `there is no track "${clip(name, 60)}"`
+            )
+          if (track.key === r.current?.key) {
+            queueJump(r, 'next')
+            return { ok: true }
+          }
+          // one that is still to come is left out of the rest of this round (it is back in the next)
+          const before = r.queue.length
+          r.queue = r.queue.filter((t) => t.key !== track.key)
+          if (r.queue.length === before)
+            return refuse(`"${track.title}" is not coming up in this round`)
+          host.event('mode', `sleep: "${track.title}" is left out of the rest of this round`)
+          return { ok: true }
+        }
         case 'volume': {
           const v = asNumber(req.volume)
           if (v === null || !Number.isFinite(v))

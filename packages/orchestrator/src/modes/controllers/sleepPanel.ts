@@ -1,7 +1,7 @@
 /**
- * What the console shows of sleep mode: one status line, some facts, four buttons and the track list, as data.
- * Pure: the controller hands over a snapshot of its state. Everything is cut to the limits of `ModePanel`, because a
- * panel that breaks one of them is dropped whole and the operator would see nothing at all.
+ * What the console shows of sleep mode: one status line, some facts, four buttons and the track list (with a Play and a
+ * Skip button on each row), as data. Pure: the controller hands over a snapshot of its state. Everything is cut to the
+ * limits of `ModePanel`, because a panel that breaks one of them is dropped whole and the operator would see nothing.
  */
 import type { ModePanelInput, PanelActionInput, SleepState } from '@animatus/protocol'
 import type { SleepIdle } from './sleep.ts'
@@ -28,6 +28,8 @@ export interface PanelState {
   /** A stage page is connected. */
   connected: boolean
   currentKey: string | null
+  /** The keys of the tracks still to come in this round, in order. */
+  upcoming: readonly string[]
   lastError: string | null
   tracks: readonly PanelTrack[]
   /** Files left out of the list, and why. */
@@ -179,6 +181,19 @@ export function sleepPanel(s: PanelState): ModePanelInput {
     },
   ]
 
+  // Skip: the track that is playing, or one that is still to come in this round
+  const coming = new Set(s.upcoming)
+  const skip = (t: PanelTrack): PanelActionInput => {
+    const why = off
+      ? off
+      : s.idle !== null
+        ? 'nothing is playing'
+        : t.key === s.currentKey || coming.has(t.key)
+          ? undefined
+          : 'it is not coming up in this round'
+    return { id: 'skip', label: 'Skip', inputs: [], ...(why ? { disabled: why } : {}) }
+  }
+
   const shown = s.tracks.slice(0, MAX_ROWS)
   return {
     status: clip(statusLine(s), 300),
@@ -202,7 +217,7 @@ export function sleepPanel(s: PanelState): ModePanelInput {
           text: clip(t.title, 300),
           detail: clip(detail(t), 300),
           active: t.key === s.currentKey,
-          actions: [{ id: 'play', label: 'Play now', inputs: [] }],
+          actions: [{ id: 'play', label: 'Play now', inputs: [] }, skip(t)],
         })),
       },
     ],

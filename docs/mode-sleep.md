@@ -144,8 +144,10 @@ was being whispered is cut off rather than finished in the normal voice.
 The Modes page shows a panel: a status line, facts (tracks found and where, whether the whisper voice exists, volume, when
 chat is answered, order), and four buttons: **Next track**, **Set the volume** (input 0 to 1), **Whisper a test line**
 (input: the line, by default the pack's `whisper_test` prompt; it goes through the same pause and resume and needs no
-model) and **Stop sleep mode**; the tracks are a list with **Play now** on each row, which also starts the mode from a
-track when it is not running. The volume of a track that is playing changes by a pause and a resume with a half-second
+model) and **Stop sleep mode**; the tracks are a list with two buttons on each row: **Play now**, which also starts the
+mode from that track when it is not running, and **Skip**: on the track that is playing it moves on (as **Next track**
+does), on one that is still to come in this round it leaves that track out of the rest of the round (it is back in the
+next), and on any other it says why it is off. The volume of a track that is playing changes by a pause and a resume with a half-second
 fade (the stage has no live volume message), so it dips and swells back; a track that is loading or waiting for a reply
 gets the new volume when it plays or comes back.
 
@@ -155,7 +157,7 @@ Through the API (all `POST`, body `{ "params": { ... } }`, a refusal is HTTP 409
 |---|---|
 | `/api/modes/sleep/enter` | Start the mode. `params.track` (a track's name, case does not matter) starts on that track; an unknown name is refused (`there is no track "x"`); when the mode is running it jumps to it. |
 | `/api/modes/sleep/exit` | Leave the mode. |
-| `/api/modes/sleep/act` with `params.action` | `next`, `play` (with `row` or `track`), `volume` (`params.volume`, a number 0 to 1: it is clamped, anything else is refused), `whisper_test` (`params.text` optional, at most 200 characters), `stop`. `next`, `whisper_test` and `stop` are refused with `sleep mode is not running` when it is not. |
+| `/api/modes/sleep/act` with `params.action` | `next`, `play` (with `row` or `track`), `skip` (with `row` or `track`; without one it is the track that plays; refused when nothing is playing, when the track does not exist, or when it is not coming up in this round), `volume` (`params.volume`, a number 0 to 1: it is clamped, anything else is refused), `whisper_test` (`params.text` optional, at most 200 characters), `stop`. `next`, `skip`, `whisper_test` and `stop` are refused with `sleep mode is not running` when it is not. |
 
 ## What the model is told
 

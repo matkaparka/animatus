@@ -21,6 +21,7 @@ import {
   sleepBatch,
   tempDir,
   tick,
+  untilRead,
   urls,
 } from './sleepRig.ts'
 
@@ -435,7 +436,9 @@ describe('no tracks', () => {
     const r = await rig({ tracks: [] })
     r.library.hangs = true
     r.clock.now += 20_000
+    const reads = r.library.reads
     const entering = r.service.enter('sleep')
+    await untilRead(r, reads + 1) // the read has begun, and so has the wait for it
     await tick(10_100)
     await entering
     expect(r.service.state('sleep')).toBe('ACTIVE')
@@ -708,6 +711,74 @@ describe('the console', () => {
     expect(r.types()).not.toContain('sleep.resume')
   })
 
+  it('skip: the track that plays is moved past, one that is still to come is left out of the rest of this round and is back in the next', async () => {
+    const r = await rig({ stage: SHORT })
+    await enterAndPlay(r) // rain plays, ocean and waves are to come
+    const row = (key: string) => rowOf(r, key).actions.find((a) => a.id === 'skip')!
+    expect(row('rain').disabled).toBeUndefined()
+    expect(row('waves').disabled).toBeUndefined()
+
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'ocean' })).toEqual({ ok: true })
+    expect(urls(r)).toEqual(['rain.mp3']) // nothing moved: ocean is only left out
+    expect(row('ocean').disabled).toBe('it is not coming up in this round')
+    expect(r.events).toContain('sleep: "ocean" is left out of the rest of this round')
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'ocean' })).toEqual({
+      ok: false,
+      reason: '"ocean" is not coming up in this round',
+    })
+
+    await tick(1_100) // rain ends: waves is next, not ocean
+    expect(urls(r)).toEqual(['rain.mp3', 'waves.mp3'])
+    await tick(1_100) // the round is over: ocean is back
+    expect(urls(r)).toEqual(['rain.mp3', 'waves.mp3', 'rain.mp3'])
+    expect(row('ocean').disabled).toBeUndefined()
+
+    // the button of the row that plays, or none at all, skips what plays
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'rain' })).toEqual({ ok: true })
+    await tick(50)
+    expect(urls(r).at(-1)).toBe('ocean.mp3')
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip' })).toEqual({ ok: true })
+    await tick(50)
+    expect(urls(r).at(-1)).toBe('waves.mp3')
+  })
+
+  it('skip is refused with the reason when there is nothing to skip: not running, no such track, nothing playing', async () => {
+    const r = await rig({ settings: { loop: false }, stage: SHORT })
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'rain' })).toEqual({
+      ok: false,
+      reason: 'sleep mode is not running',
+    })
+    await enterAndPlay(r)
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'nothing' })).toEqual({
+      ok: false,
+      reason: 'there is no track "nothing"',
+    })
+    await tick(3_500) // the playlist is over
+    expect(r.ctl.status().idle).toBe('finished')
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'waves' })).toEqual({
+      ok: false,
+      reason: 'nothing is playing',
+    })
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip' })).toEqual({
+      ok: false,
+      reason: 'nothing is playing',
+    })
+  })
+
+  it('skipping the track that plays while a reply is being whispered waits for the reply to be over', async () => {
+    const r = await rig()
+    await enterAndPlay(r)
+    const reply = await r.reply()
+    await tick(100)
+    expect(await r.ctl.onConsoleRequest!({ action: 'skip', row: 'rain' })).toEqual({ ok: true })
+    await tick(100)
+    expect(urls(r)).toEqual(['rain.mp3'])
+    reply.finish()
+    await tick(3_000)
+    expect(urls(r)).toEqual(['rain.mp3', 'ocean.mp3'])
+    expect(r.types()).not.toContain('sleep.resume')
+  })
+
   it('the volume: applied to a playing track by a pause and a resume with a short fade, kept for the next start otherwise, refused when it is no number', async () => {
     const r = await rig({ settings: { volume: 0.5 } })
     expect(await r.ctl.onConsoleRequest!({ action: 'volume', volume: 0.8 })).toEqual({ ok: true })
@@ -827,7 +898,10 @@ describe('the console panel', () => {
     expect(p.sections[0]!.rows.map((x) => x.id)).toEqual(['rain', 'night/ocean'])
     expect(rowOf(r, 'rain').detail).toBe('9.4 min, 1 line, mp3')
     expect(rowOf(r, 'night/ocean').detail).toBe('no captions, mp3')
-    expect(rowOf(r, 'rain').actions).toMatchObject([{ id: 'play', label: 'Play now' }])
+    expect(rowOf(r, 'rain').actions).toMatchObject([
+      { id: 'play', label: 'Play now' },
+      { id: 'skip', label: 'Skip', disabled: 'sleep mode is not running' },
+    ])
     expect(p.actions.map((a) => [a.id, a.disabled])).toEqual([
       ['next', 'sleep mode is not running'],
       ['volume', undefined],

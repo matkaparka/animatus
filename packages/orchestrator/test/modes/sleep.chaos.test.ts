@@ -157,6 +157,15 @@ const ACTIONS: Action[] = [
     weight: 3,
     run: (c) => viaConsole(c, { action: 'play', row: pick([...POOL, 'nothing'], c.dice) }),
   },
+  {
+    name: 'console-skip',
+    weight: 3,
+    run: (c) =>
+      viaConsole(c, {
+        action: 'skip',
+        ...(c.dice() < 0.8 ? { row: pick([...POOL, 'nothing'], c.dice) } : {}),
+      }),
+  },
   { name: 'console-start', weight: 2, run: (c) => viaConsole(c, {}) },
   {
     name: 'console-volume',

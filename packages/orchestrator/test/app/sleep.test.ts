@@ -309,9 +309,13 @@ describe('sleep mode, through the whole program', () => {
     const act = (params: Record<string, string | number>) =>
       r.app.modeAction('sleep', 'act', { ...NO_FLAGS, params })
 
+    // the folder is read once at start-up, and that is real disk I/O: wait for the list instead of assuming it is there
+    const rows = () =>
+      r.app.modeViews().find((m) => m.id === 'sleep')?.panel?.sections[0]?.rows ?? []
+    await until(() => rows().length === 2, 5000, 'the track list')
     const idle = r.app.modeViews().find((m) => m.id === 'sleep')!
     expect(idle.state).toBe('IDLE')
-    expect(idle.panel!.sections[0]!.rows.map((x) => x.id)).toEqual(['aa-rain', 'bb-ocean'])
+    expect(rows().map((x) => x.id)).toEqual(['aa-rain', 'bb-ocean'])
     await expect(act({ action: 'next' })).rejects.toMatchObject({
       httpStatus: 409,
       message: 'sleep mode is not running',
@@ -327,6 +331,21 @@ describe('sleep mode, through the whole program', () => {
     await until(() => probe.ofType('sleep.play').length >= 2, 3000, 'the next track')
     expect(probe.ofType('sleep.play')[1]).toMatchObject({ url: '/asset/asmr/aa-rain.mp3' })
     await until(() => probe.model.phase === 'playing', 3000)
+
+    // the ocean is still to come in this round: skipping it leaves it out, and its row says so
+    await act({ action: 'skip', row: 'bb-ocean' })
+    const oceanSkip = () =>
+      r.app
+        .modeViews()
+        .find((m) => m.id === 'sleep')!
+        .panel!.sections[0]!.rows.find((x) => x.id === 'bb-ocean')!
+        .actions.find((a) => a.id === 'skip')!
+    expect(oceanSkip().disabled).toBe('it is not coming up in this round')
+    await expect(act({ action: 'skip', row: 'bb-ocean' })).rejects.toMatchObject({
+      httpStatus: 409,
+      message: '"bb-ocean" is not coming up in this round',
+    })
+    expect(probe.ofType('sleep.play')).toHaveLength(2) // nothing moved
 
     await act({ action: 'volume', volume: 0.4 })
     await until(() => probe.ofType('sleep.resume').length >= 1, 3000, 'the volume change')

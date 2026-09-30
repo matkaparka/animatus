@@ -20,6 +20,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   phase: 'playing',
   connected: true,
   currentKey: 'rain',
+  upcoming: ['ocean'],
   lastError: null,
   tracks: [track('rain'), track('ocean')],
   skipped: [],
@@ -72,7 +73,34 @@ describe('the panel', () => {
       ['rain', false],
       ['ocean', true],
     ])
-    expect(p.sections[0]!.rows.every((r) => r.actions[0]!.id === 'play')).toBe(true)
+    expect(
+      p.sections[0]!.rows.every((r) => r.actions.map((a) => a.id).join() === 'play,skip')
+    ).toBe(true)
+  })
+
+  it('skip is offered for the track that is playing and for one still to come, and says why it is not for the others', () => {
+    const skips = (over: Partial<PanelState>) =>
+      Object.fromEntries(
+        ModePanel.parse(sleepPanel(state(over))).sections[0]!.rows.map((r) => [
+          r.id,
+          r.actions.find((a) => a.id === 'skip')!.disabled,
+        ])
+      )
+    const three = { tracks: [track('rain'), track('ocean'), track('forest')] }
+    // rain plays, ocean is next, forest has already played this round
+    expect(skips({ ...three, upcoming: ['ocean'] })).toEqual({
+      rain: undefined,
+      ocean: undefined,
+      forest: 'it is not coming up in this round',
+    })
+    expect(skips({ running: false, currentKey: null, upcoming: [] })).toEqual({
+      rain: 'sleep mode is not running',
+      ocean: 'sleep mode is not running',
+    })
+    expect(skips({ idle: 'finished', upcoming: [] })).toEqual({
+      rain: 'nothing is playing',
+      ocean: 'nothing is playing',
+    })
   })
 
   it('a stopped mode has only the volume to offer, and says why the rest are off', () => {

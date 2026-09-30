@@ -256,6 +256,8 @@ export async function rig(opts: RigOpts = {}): Promise<Rig> {
       if (library.fails) throw new Error(library.fails)
       return { tracks: [...library.tracks], skipped: [...library.skipped] }
     },
+    // no disk under fake timers, unless the test brought files of its own (a restart)
+    ...(opts.dir ? {} : { readState: async () => ({}) }),
     ...(opts.random ? { random: opts.random } : {}),
   }
   let ctl!: Controller
@@ -326,6 +328,13 @@ export async function rig(opts: RigOpts = {}): Promise<Rig> {
   rigs.push(r)
   await tick(0) // the first look at the folder
   return r
+}
+
+/** Lets real time pass (fake timers leave `setImmediate` alone) until the folder has been read `n` times. */
+export async function untilRead(r: Rig, n: number): Promise<void> {
+  for (let i = 0; i < 10_000 && r.library.reads < n; i++)
+    await new Promise((res) => setImmediate(res))
+  expect(r.library.reads).toBeGreaterThanOrEqual(n)
 }
 
 /** Enter the mode and let the first track start. */
