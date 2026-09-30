@@ -1,0 +1,20 @@
+manifest_version: 1
+id: game
+title: Play a game
+description: >-
+  A game agent (a program with its own model and tools) plays a game while the character comments on what happens and
+  steers it with short directives. The agent is a plugin that speaks the Worker protocol (docs/workers.md). The game is
+  not shown on the stage: put its window in the picture with your streaming software.
+requires:
+  services: [game]
+  vram_mb_est: 0
+exclusive_with: [sing, draw, sleep, commentary]
+# Below the dance (60): a dance gift is a short interlude, nothing is said about the game while it lasts.
+priority: 40
+prompt: prompts/active.md
+tools: [game_command]
+triggers:
+  hotkey: ctrl+alt+m
+stage:
+  # the character small in the bottom-right corner, so the game has the room
+  layout: { char: { x: 0, y: 0, scale: 0.45 } }
