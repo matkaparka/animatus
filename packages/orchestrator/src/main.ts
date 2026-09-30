@@ -7,6 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { App } from './app/app.ts'
+import { friendlyStartError } from './cli/startError.ts'
 import { ConfigError, loadConfig } from './config.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
@@ -81,7 +82,7 @@ main().then(
     if (code >= 0) process.exit(code)
   },
   (e) => {
-    console.error(e instanceof Error ? (e.stack ?? e.message) : e)
+    console.error(friendlyStartError(e) ?? (e instanceof Error ? (e.stack ?? e.message) : e))
     process.exit(1)
   }
 )
