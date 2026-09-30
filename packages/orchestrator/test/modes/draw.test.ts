@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events'
 import { mkdir, mkdtemp, readFile, readdir, rm, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { parseConfig } from '../../src/config.ts'
 import { createDrawController } from '../../src/modes/controllers/draw.ts'
 import type { LlmTextRequest, ModeHost, SayOptions } from '../../src/modes/host.ts'
@@ -1262,5 +1262,24 @@ describe('the console panel', () => {
     const r = await rig({ enter: false, serviceUp: false })
     await r.forge.stop()
     expect(r.panel().facts.find((f) => f.label === 'Image service')?.value).toBe('not asked yet')
+  })
+
+  it('the panel keeps asking the service while the mode runs, and stops when it is left', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      const r = await rig()
+      const asked = () => r.forge.calls.filter((c) => c.path === '/health').length
+      await until(() => asked() === 1, 4000, 'the look at entry')
+      r.forge.health = () => healthy({ max_long_side: 640 })
+      await vi.advanceTimersByTimeAsync(15_000)
+      await until(() => asked() === 2, 4000, 'the next look')
+      expect(r.panel().facts.find((f) => f.label === 'Longest side')?.value).toBe('640 px')
+      await r.exit()
+      await vi.advanceTimersByTimeAsync(60_000)
+      await pause(50)
+      expect(asked()).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
