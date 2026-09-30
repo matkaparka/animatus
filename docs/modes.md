@@ -32,6 +32,10 @@ stage:
 `IDLE → STARTING (start services) → ACTIVE → STOPPING (unload, wait for VRAM to fall back) → IDLE`.
 Any step that times out returns to `IDLE` and raises an alarm.
 
+The wait for VRAM to fall back (`vram_not_released` if it does not, within 20 s) happens only when leaving the mode stopped a
+plugin process that uses the GPU. A mode that stopped none (dance, game, commentary) leaves at once, and memory that grew for
+another reason (the speech server's cache, another program on the same card) is not blamed on it.
+
 ## Admission (configuration-driven, not hard-coded)
 
 1. At start-up, and after any plugin setting changes, read the relevant settings (image service maximum
@@ -109,6 +113,7 @@ a file by putting the same name in `config/modes/<id>/prompts/`, file by file, w
 | `sing` | sings the songs viewers ask for (`点歌 …`) with the lyrics on screen, then says a closing line | `paths.songs`, the `singing` plugin (RVC via your own Applio, audio-separator) | [mode-sing.md](mode-sing.md) |
 | `commentary` | comments on what a game window shows | the `screencap` plugin, a model that accepts pictures | [mode-commentary.md](mode-commentary.md) |
 | `draw` | draws what a viewer asks for (`画 …`) on your own Forge under an all-ages policy, shows it in a frame, comments | the `forge` plugin and a running Forge, a model that accepts pictures | [mode-draw.md](mode-draw.md) |
+| `game` | a game agent plays, the character comments on what happens and steers it with short directives | one plugin that speaks the Worker protocol (`game-demo`, `game-attach`, `game-attach-legacy`) | [mode-game.md](mode-game.md) |
 
 ## Dance
 

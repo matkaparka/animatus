@@ -100,6 +100,12 @@ export class ModeService extends EventEmitter<Events> {
       resident: [...d.resident],
       matrix: () => this.matrix(),
       vramNow: () => d.gpu.usedMb(),
+      // only a plugin process the program started can hold memory that leaving the mode should give back
+      usesGpu: (names) =>
+        names.some((n) => {
+          const entry = this.providerOf(n)
+          return entry?.manifest.runtime.type === 'process' && entry.manifest.resources.gpu
+        }),
       ...(d.mark ? { mark: d.mark } : {}),
       ...(d.startTimeoutMs !== undefined ? { startTimeoutMs: d.startTimeoutMs } : {}),
       ...(d.stopTimeoutMs !== undefined ? { stopTimeoutMs: d.stopTimeoutMs } : {}),

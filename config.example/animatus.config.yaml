@@ -126,6 +126,16 @@ plugins:
       python: C:/path/to/audio-env/python.exe      # has PyYAML, numpy, scipy, soundfile and audio-separator
       songs_dir: C:/path/to/songs                  # must be the same folder as paths.songs
       settings: C:/path/to/singing.yaml            # start from plugins/singing/settings.example.yaml
+  game-demo:                       # a pretend game that ticks along by itself, to try the game mode (docs/mode-game.md)
+    enabled: false
+  game-attach:                     # a game worker you started yourself (docs/workers.md)
+    enabled: false
+    config:
+      url: http://127.0.0.1:8098
+  game-attach-legacy:              # an older Civilization VI player or Minecraft bot you started yourself
+    enabled: false
+    config:
+      url: http://127.0.0.1:8098
 
 # Modes take over the stream for a while. Every mode is off until you switch it on here; the folders under
 # modes/ say which exist, and the console's Modes page shows which of them fit in GPU memory right now.
@@ -152,6 +162,9 @@ modes:
   commentary:                      # comments on what a game window shows (docs/mode-commentary.md)
     enabled: false                 # needs plugins.screencap.enabled and a model that accepts pictures
     config: {}                     # window ("exe:game.exe" or part of a title), interval_sec, language, ... all optional
+  game:                            # a game agent plays, the character comments on it and steers it (docs/mode-game.md)
+    enabled: false                 # needs one of game-demo, game-attach, game-attach-legacy (at most one of them enabled)
+    config: {}                     # protocol, name, title, poll_sec, comment_gap_sec, stale_sec, notes_kept, ... all optional
 
 # What the character remembers between streams (docs/memory.md). Off by default: it keeps what viewers say about
 # themselves. Files are Markdown under data/memory; the console's Memory tab edits them.

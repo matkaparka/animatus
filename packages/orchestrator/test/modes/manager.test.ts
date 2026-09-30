@@ -287,6 +287,36 @@ describe('ModeManager: failures and timeouts', () => {
     expect(alarms).toEqual(['vram_not_released'])
   })
 
+  it('does not wait for GPU memory, or blame the mode, when it stopped nothing that used the GPU', async () => {
+    let vram = 3000
+    const { mm, alarms } = setup([mode('game')], {
+      vramNow: () => vram,
+      settleTimeoutMs: 400,
+      usesGpu: () => false,
+    })
+    await mm.enter('game')
+    vram = 10000 // something else grew: the speech server's cache, another program on the card
+    const started = Date.now()
+    await mm.exit('game')
+    expect(Date.now() - started).toBeLessThan(300)
+    expect(alarms).toEqual([])
+  })
+
+  it('still waits when the mode stopped a service that used the GPU', async () => {
+    let vram = 3000
+    const asked: string[][] = []
+    const { mm, alarms } = setup([mode('draw', {}, ['tts', 'forge'])], {
+      vramNow: () => vram,
+      settleTimeoutMs: 120,
+      usesGpu: (names) => (asked.push(names), true),
+    })
+    await mm.enter('draw')
+    vram = 10000
+    await mm.exit('draw')
+    expect(asked).toEqual([['forge']]) // the resident speech service is not asked about
+    expect(alarms).toEqual(['vram_not_released'])
+  })
+
   it('exitAll leaves every active mode', async () => {
     const { mm } = setup([mode('a'), mode('b')])
     await mm.enter('a')

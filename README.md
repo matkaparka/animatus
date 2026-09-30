@@ -49,7 +49,7 @@ Under development, run by its author. Working today:
 |---|---|
 | Stage | An empty page that renders the VRM, plays the voice with lip sync, motion and a relaxed built-in pose, subtitles, credits, lyrics and picture frames. |
 | Orchestrator | Chat in, model, sentence cutting and tags, speech scheduling, memory, tools with a tool gate and approvals, automations, a safety check before the voice. |
-| Modes | Dance, sing, sleep, draw and commentary; game workers speak one protocol. |
+| Modes | Dance, sing, sleep, draw, commentary and game; game agents speak one protocol. |
 | Console | Run, plugins, modes, approvals, memory editor, settings, keys. |
 | Release | First-run setup, doctor, secret scan, asset scan, licence audit. |
 

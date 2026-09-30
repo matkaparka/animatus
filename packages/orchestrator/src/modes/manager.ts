@@ -42,6 +42,12 @@ export interface ModeManagerDeps {
   matrix(): Matrix
   /** Current GPU memory in use on the budget card (MiB), or null if unknown. */
   vramNow?(): number | null
+  /**
+   * Whether any of these services, just stopped, held GPU memory. When given, leaving a mode that stopped none waits
+   * for no memory to fall and raises no alarm: memory that grew for another reason (the speech server's cache, another
+   * program on the card) is not the mode's. Without it every exit waits, as it used to.
+   */
+  usesGpu?(services: string[]): boolean
   /** Marks for the VRAM probe: `enter:<id>` / `exit:<id>`. */
   mark?(label: string): void
   startTimeoutMs?: number
@@ -266,7 +272,7 @@ export class ModeManager extends EventEmitter<ManagerEvents> {
           )
           const release = slot.neededServices.filter((s) => !stillNeeded.has(s))
           if (release.length) await this.d.releaseServices(release)
-          await this.waitSettle(slot, id)
+          if (!this.d.usesGpu || this.d.usesGpu(release)) await this.waitSettle(slot, id)
         })(),
         this.d.stopTimeoutMs,
         ctl,
