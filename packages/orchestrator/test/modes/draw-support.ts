@@ -5,7 +5,31 @@
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import path from 'node:path'
 import { crc32, deflateSync } from 'node:zlib'
+
+/** The blocklist that ships with the image service, which the mode's default points at (relative to the project root). */
+export const REPO_BLOCKLIST = path.resolve(
+  __dirname,
+  '../../../../plugins/forge/blocklist.default.txt'
+)
+
+/** What the model answers to the first planning call. */
+export const selectAnswer = (over: Record<string, unknown> = {}): string =>
+  JSON.stringify({
+    style: 'anime',
+    subject: 'a knight',
+    checkpoint: 'anime-model',
+    loras: [],
+    orientation: 'portrait',
+    self: false,
+    note: 'fits',
+    ...over,
+  })
+
+/** What the model answers to the second. */
+export const writeAnswer = (prompt = '1girl, armor', negative = ''): string =>
+  JSON.stringify({ prompt, negative })
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
@@ -242,6 +266,7 @@ const route = (over: Record<string, unknown> = {}) => ({
 /** `modes.draw.config` for the tests: four routes, the shipped blocklist, short times. */
 export function drawConfig(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    blocklist_files: [REPO_BLOCKLIST],
     cooldown_sec: 300,
     show_sec: 600,
     reaction_wait_sec: 5,

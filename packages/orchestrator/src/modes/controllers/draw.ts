@@ -173,7 +173,6 @@ export function createDrawController(
   }
   const shortName = (name: string, max = cfg.frame.max_name_chars): string =>
     truncateChars(name, max)
-  const stale = (run: Running): boolean => run.epoch !== epoch || run.abort.signal.aborted
 
   // ─────────────────────────────── the frame ───────────────────────────────
 
@@ -212,7 +211,8 @@ export function createDrawController(
 
   /** What the frame showed before a request began, or the hint when that picture has been up for too long. */
   const restore = (before: FrameState): void => {
-    if (frame === before) return
+    // only the "drawing" state is this request's: if the frame never changed, or the operator cleared it, leave it
+    if (frame.kind !== 'generating') return
     const expired = before.kind === 'showing' && host.now() - before.at >= cfg.show_sec * 1000
     setFrame(before.kind === 'showing' && !expired ? before : { kind: 'idle' })
   }
@@ -364,11 +364,20 @@ export function createDrawController(
     const run: Running = { job, abort: new AbortController(), epoch, stage: 'planning' }
     current = run
     const before = frame
+    /** The mode was left meanwhile: the frame is already gone and nothing may be shown, said or raised any more. */
+    const gone = () => run.epoch !== epoch
+    const cancelled = () => run.abort.signal.aborted
     try {
       const outcome = await produce(run)
-      if (stale(run)) {
-        // stopped from outside: nothing is shown, said or raised; the viewer did nothing wrong
+      if (gone()) {
+        cooldowns.refund(job.key) // the viewer did nothing wrong
+        return
+      }
+      if (outcome.kind === 'cancelled' || cancelled()) {
+        // cancelled from the panel: the frame goes back, nothing is said or raised, the viewer keeps their turn
+        restore(before)
         cooldowns.refund(job.key)
+        host.event('mode', `draw: the request from ${job.user} was cancelled`)
         return
       }
       if (outcome.kind === 'ok') {
@@ -387,7 +396,7 @@ export function createDrawController(
         restore(before)
         host.event('mode', `draw: a request from ${job.user} was refused (${outcome.reason})`)
         react({ kind: 'refused' })
-      } else if (outcome.kind === 'error') {
+      } else {
         restore(before)
         cooldowns.refund(job.key) // a fault is not the viewer's doing: they may ask again at once
         lastProblem = outcome.message
@@ -399,22 +408,20 @@ export function createDrawController(
         )
         host.event('mode', `draw: could not draw for ${job.user}: ${outcome.message}`)
         react({ kind: 'error' })
-      } else {
-        restore(before)
-        cooldowns.refund(job.key)
       }
     } catch (e) {
       // a bug in this file must not stop the queue
       host.log('error', `draw: ${oneLine(e)}`)
-      if (!stale(run)) {
+      if (!gone()) {
         restore(before)
         cooldowns.refund(job.key)
-        host.alarm(
-          'draw_failed',
-          'warn',
-          `the picture for ${job.user} could not be made: ${oneLine(e)}`,
-          'draw'
-        )
+        if (!cancelled())
+          host.alarm(
+            'draw_failed',
+            'warn',
+            `the picture for ${job.user} could not be made: ${oneLine(e)}`,
+            'draw'
+          )
       }
     } finally {
       if (current === run) current = null
