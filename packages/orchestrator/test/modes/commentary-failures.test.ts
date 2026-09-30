@@ -10,6 +10,7 @@ import { ConfigError } from '../../src/config.ts'
 import { jpegBase64, notFound, win } from './fakeCapture.ts'
 import { fakeHost } from './fakeHost.ts'
 import { analysis, commentaryRig, identification, useCommentaryRig } from './commentaryRig.ts'
+import type { Rig } from './commentaryRig.ts'
 
 useCommentaryRig()
 
@@ -621,6 +622,60 @@ describe('the modes it excludes', () => {
     expect(r.f.told).toHaveLength(1) // one loop, not two
     expect(r.fake.calls).toHaveLength(1)
   })
+})
+
+describe('leaving the mode takes every alarm of it away', () => {
+  const cases: {
+    code: string
+    settings?: Record<string, unknown>
+    arrange: (r: Rig) => void
+    ticks: number[]
+  }[] = [
+    {
+      code: 'commentary_black',
+      settings: { black_alarm_after: 1 },
+      arrange: (r) => void (r.fake.otherwise = () => ({ kind: 'frame', black: true })),
+      ticks: [1500],
+    },
+    { code: 'commentary_capture', arrange: (r) => void (r.fake.windows = []), ticks: [1500] },
+    {
+      code: 'commentary_model',
+      arrange: (r) =>
+        void (r.model.identify = () => {
+          throw new Error('quota exceeded')
+        }),
+      ticks: [1500],
+    },
+    {
+      code: 'commentary_analysis',
+      arrange: (r) => void (r.model.identify = () => 'no json at all'),
+      ticks: [1500, 8000, 8000],
+    },
+    { code: 'commentary_window', settings: { window: null }, arrange: () => {}, ticks: [1500] },
+  ]
+
+  it.each(cases)('$code, when the mode is left', async ({ code, settings, arrange, ticks }) => {
+    const r = await commentaryRig(settings ? { settings } : {})
+    arrange(r)
+    await r.enter()
+    for (const t of ticks) await r.tick(t)
+    expect(r.alarms()).toEqual([code])
+    await r.exit()
+    expect(r.alarms()).toEqual([])
+  })
+
+  it.each(cases)(
+    '$code, when the program shuts down',
+    async ({ code, settings, arrange, ticks }) => {
+      const r = await commentaryRig(settings ? { settings } : {})
+      arrange(r)
+      await r.enter()
+      for (const t of ticks) await r.tick(t)
+      expect(r.alarms()).toEqual([code])
+      await r.service.dispose()
+      expect(r.alarms()).toEqual([])
+    }
+  )
 })
 
 describe('the settings', () => {
