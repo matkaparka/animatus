@@ -1,5 +1,6 @@
-# Animatus configuration (draft: the orchestrator's loader defines the final schema).
-# Copy this directory to ./config and edit. Secrets are referenced as ${secret:name}.
+# Animatus configuration. Copy this directory to ./config and edit the copy (config/ is git-ignored).
+# Relative paths are relative to the project root. Secrets are never written here: refer to them as
+# ${secret:name} and put the value in config/.env or in the console's write-only key page.
 version: 1
 
 servers:
@@ -10,21 +11,27 @@ paths:
   data_dir: ./data
   # Your own files. The orchestrator serves them to the stage as /asset/<kind>/... and never copies them.
   models: C:/path/to/vrm-models
-  motions: C:/path/to/motions      # idle/, talk/, tags/, dance/<name>/{motion.vrma, music.*, meta.json}
+  motions: C:/path/to/motions      # idle/, talk/, poses/<tag>.vrma, dance/<name>/{motion.vrma, music.*, meta.json}
+  lipsync: C:/path/to/lipsync      # folder holding profile.json (wLipSync vowel profile); optional, volume lip sync without it
   songs: C:/path/to/songs
   asmr: C:/path/to/asmr
 
 stage:
-  model: my-model.vrm              # relative to paths.models
-  background: { kind: none }
+  model: my-model.vrm              # file name inside paths.models; null shows an empty stage
+  background: { kind: none }       # or { kind: color, color: "#1f2a44" } / { kind: image, url: /asset/... }
   lighting: { intensity: 1 }
-  # Browser launcher for the capture window
+  camera:
+    fit: upper_body                # head | upper_body | full_body | none (none uses position/target/follow_head)
+    fov: 20
+  layout:
+    char: { x: 0, y: 0, scale: 1 }
+  # Leave out `browser` to open the stage yourself (OBS browser source, any Chromium in app mode).
   browser:
     executable: C:/Program Files/Google/Chrome/Application/chrome.exe
     profile_dir: ./data/animatus-stage-profile   # keep "animatus-stage" in the path: the VRAM probe keys on it
     window_size: [1920, 1080]
 
-persona: ./personas/example
+persona: ./personas/example        # folder with persona.md
 
 llm:
   providers:
@@ -33,24 +40,53 @@ llm:
       model: your-model-name
       api_key: ${secret:gemini}
       proxy: ""                    # e.g. http://127.0.0.1:7890
+      thinking_budget: 0           # 0 turns thinking off (lower latency)
     - id: local
       kind: openai-compatible
       base_url: http://127.0.0.1:8081/v1
       model: local-model
   order: [primary, local]          # tried in this order; falls back when quota runs out
+  history_messages: 10             # latest chat entries sent with every request
+  temperature: 1.0
 
 tts:
-  plugin: gptsovits
-  # Emotion to reference audio. Edited in the console; whisper is used by sleep mode.
-  styles: {}
+  # Emotion to reference audio. `whisper` is used by sleep mode. Edited in the console later.
+  styles:
+    neutral:
+      ref_audio: C:/path/to/reference/neutral.wav
+      ref_text: What the reference recording says.
+  default_style: neutral
+  text_lang: zh
+  prompt_lang: zh
+  split_method: cut5
+
+speech:
+  sensitive_words_file: ./config/sensitive-words.txt
+  lookahead: 2
+  first_comma_min_chars: 10
+
+# Audience input. Snake_case here; the defaults below are the legacy live-stream values.
+inbox:
+  filter: { danmaku_max_age_sec: 30, max_merge: 3, min_chars: 2, max_chars: 80, repeat_window_sec: 60 }
+  pacer: { idle_settle_sec: 1.5, busy_timeout_sec: 20, min_interval_sec: 2 }
+  ignore_uids: []
+
+sources:
+  bilibili:
+    enabled: false
+    room_id: 1
+    # cookie_secret: bili_cookie     # optional: a logged-in cookie in the secret store shows real names
 
 plugins:
-  gptsovits:
+  gptsovits:                       # starts GPT-SoVITS itself (needs its own install)
     enabled: true
     config:
       root: C:/path/to/GPT-SoVITS
       python: C:/path/to/GPT-SoVITS/runtime/python.exe
-      api_port: 9880
+  gptsovits-attach:                # or: use a GPT-SoVITS that is already running
+    enabled: false
+    config:
+      url: http://127.0.0.1:9880
   motion:
     enabled: false
   forge:
@@ -64,5 +100,5 @@ modes:
   sleep: { enabled: true }
   dance: { enabled: true }
 
-speech:
-  sensitive_words_file: ./config/sensitive-words.txt
+console:
+  open_browser: false
