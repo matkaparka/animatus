@@ -9,6 +9,7 @@
 import type { ClipRef, Emotion, ModePanelInput, RunEvent } from '@animatus/protocol'
 import type { AppConfig } from '../config.ts'
 import type { Batch, SongCommand } from '../inbox/types.ts'
+import type { ChatCommandInput } from '../inbox/types.ts'
 import type { ChatPart } from '../llm/types.ts'
 import type { StageHub } from '../stage/hub.ts'
 import type { MotionLibrary } from '../library/motionLibrary.ts'
@@ -151,8 +152,23 @@ export interface ModeControllerHooks {
    * back through `onConsoleRequest` with `action` (and `row`) set to the ids given here.
    */
   panel?(): ModePanelInput | null
+  /**
+   * A chat message starts with one of the command words the mode declares (`triggers.danmaku_prefix`), and the mode is
+   * ACTIVE. `argument` is what follows the word, trimmed. Return true to take the message as a command (it is then not
+   * chat any more), false to let it go on as ordinary chat. Called for every matching message, so it must be quick:
+   * start slow work yourself and return.
+   */
+  onChatCommand?(command: ChatCommand): boolean
   /** A viewer's song command was found in chat (request, skip, list, ...). Return true when this mode took it. */
   onSongCommand?(command: SongCommand): Promise<boolean> | boolean
+}
+
+/** A chat message that starts with a mode's command word. */
+export interface ChatCommand extends ChatCommandInput {
+  /** The command word that matched (one of the mode's `triggers.danmaku_prefix`). */
+  prefix: string
+  /** What follows the command word, trimmed; may be empty. */
+  argument: string
 }
 
 export type ModeControllerFull = ModeController & ModeControllerHooks

@@ -14,7 +14,7 @@ import { AppError } from '../app/errors.ts'
 import { renderTemplate } from '../brain/prompt.ts'
 import type { ModePrompt } from '../brain/prompt.ts'
 import type { AppConfig } from '../config.ts'
-import type { Batch, SongCommand } from '../inbox/types.ts'
+import type { Batch, ChatCommandInput, SongCommand } from '../inbox/types.ts'
 import type { PluginRegistry, RegistryEntry } from '../plugins/registry.ts'
 import type { Supervisor } from '../plugins/supervisor.ts'
 import { computeMatrix, hashConfig } from './admission.ts'
@@ -423,6 +423,33 @@ export class ModeService extends EventEmitter<Events> {
       })
     )
     return lines
+  }
+
+  /**
+   * A chat message that starts with a command word of a mode that is ACTIVE goes to that mode. True when the mode took
+   * it as its command; a mode that is not active leaves its words as ordinary chat. Longer command words win over
+   * shorter ones (`/画` before `画`).
+   */
+  chatCommand(cmd: ChatCommandInput): boolean {
+    const text = cmd.text.trim()
+    const candidates: { id: string; prefix: string }[] = []
+    for (const id of this.manager.active()) {
+      if (this.manager.state(id) !== 'ACTIVE') continue
+      for (const prefix of this.packs.get(id)?.manifest.triggers.danmaku_prefix ?? [])
+        if (text.startsWith(prefix)) candidates.push({ id, prefix })
+    }
+    candidates.sort((a, b) => b.prefix.length - a.prefix.length)
+    for (const { id, prefix } of candidates) {
+      const c = this.controllers.get(id)
+      if (!c?.onChatCommand) continue
+      try {
+        if (c.onChatCommand({ ...cmd, prefix, argument: text.slice(prefix.length).trim() }))
+          return true
+      } catch (e) {
+        this.log('error', `modes: ${id} failed on a chat command: ${(e as Error).message}`)
+      }
+    }
+    return false
   }
 
   /** A song command from chat goes to the modes that handle songs. True when one took it. */

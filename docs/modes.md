@@ -87,6 +87,8 @@ Optional hooks, all called by the mode service:
 | `onBatch(batch)` | a batch of audience input is about to go to the model | extra lines for that reply only (a dance gift: "you are about to dance"); may start the mode |
 | `onModelRequest(req)` | the model wrote a tag for the mode (`[motion:dance:name]`) | start the mode if it may |
 | `onConsoleRequest(req)` | the console's Modes page asked, with details | start, tune, stop; the answer says why if it cannot |
+| `onChatCommand(cmd)` | a chat message starts with a word the manifest lists under `triggers.danmaku_prefix`, and the mode is ACTIVE | take the message as a command (return true: it is not chat any more) or leave it to the chat (false). Longer words are asked first. Must be quick: start slow work and return |
+| `panel()` | every time the console asks for the modes | what the console shows besides the state: facts, buttons (with inputs) and lists, as data (`ModePanel`); what the operator presses comes back through `onConsoleRequest` with `action` (and `row`, and one field per input) set to the ids given |
 
 A mode is only built when the configuration switches it on (`modes.<id>.enabled`, default off) **and** this
 program has a controller for it. Anything else shows on the Modes page as unavailable with the reason; a mode

@@ -499,6 +499,43 @@ describe('what a mode can use of the program', () => {
     expect(String(r.llm.requests[0]!.messages.at(-1)!.content)).toContain('点了《晴天》')
   })
 
+  it('a chat command of an active mode is taken from the chat; with the mode off it is ordinary chat', async () => {
+    const dir = await tempDir('modes')
+    await mkdir(path.join(dir, 'painter'), { recursive: true })
+    await writeFile(
+      path.join(dir, 'painter', 'mode.yaml'),
+      'id: painter\ntitle: Painter\ntriggers:\n  danmaku_prefix: ["画"]\n'
+    )
+    const taken: unknown[] = []
+    const r = await rig({
+      app: {
+        modesDirs: [dir],
+        controllers: {
+          painter: () => ({
+            enter: async () => {},
+            exit: async () => {},
+            onChatCommand: (c) => (taken.push([c.uname, c.argument]), true),
+          }),
+        },
+      },
+      config: { modes: { painter: { enabled: true } } },
+    })
+    r.llm.reply = () => ['[neutral]ok']
+    await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    r.bili.emit(danmaku('画 一条龙'))
+    await until(() => r.llm.requests.length >= 1, 4000, 'a model call with the message as chat')
+    expect(taken).toEqual([]) // the mode is not active: an ordinary message
+    expect(String(r.llm.requests[0]!.messages.at(-1)!.content)).toContain('画 一条龙')
+
+    await r.app.modes.enter('painter')
+    r.bili.emit(danmaku('画 一只猫', { uid: 1002, uname: 'bob' }))
+    await until(() => taken.length >= 1, 3000, 'the command')
+    expect(taken).toEqual([['bob', '一只猫']])
+    await new Promise((res) => setTimeout(res, 300))
+    expect(r.llm.requests).toHaveLength(1) // and it did not become chat
+  })
+
   it('without a controller for songs, a song command is only noted', async () => {
     const r = await rig()
     await r.connect()

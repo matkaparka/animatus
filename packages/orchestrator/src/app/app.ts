@@ -266,6 +266,7 @@ export class App {
       log: (level, msg, extra) => this.logger(level, `inbox: ${msg}`, extra),
       onDrop: (reason, info) =>
         this.logger('debug', `inbox: dropped (${reason})`, { ...info, text: undefined }),
+      onChatCommand: (cmd) => this.modes.chatCommand(cmd),
       onSongCommand: (cmd) =>
         void this.modes
           .songCommand(cmd)

@@ -495,6 +495,62 @@ describe('prompts and hooks', () => {
     expect(r.service.state('b')).toBe('ACTIVE')
   })
 
+  it('a chat command goes to an ACTIVE mode that declares the word, the longest word first, and only when the mode takes it', async () => {
+    const seen: string[] = []
+    const r = await rig({
+      modes: [
+        {
+          pack: pack('draw', { triggers: { danmaku_prefix: ['画', '/画'] } }),
+          controller: {
+            onChatCommand: (c) => (
+              seen.push(`draw:${c.prefix}|${c.argument}`),
+              c.argument !== 'no'
+            ),
+          },
+        },
+        {
+          pack: pack('other', { triggers: { danmaku_prefix: ['画龙'] } }),
+          controller: {
+            onChatCommand: (c) => (seen.push(`other:${c.prefix}|${c.argument}`), false),
+          },
+        },
+        { pack: pack('plain'), controller: {} },
+      ],
+    })
+    const cmd = (text: string) =>
+      r.service.chatCommand({ uid: 1, uname: 'ann', text, admin: false, owner: false })
+    expect(cmd('画 一条龙')).toBe(false) // nothing is active: it stays chat
+    await r.service.enter('draw')
+    expect(cmd('画 一条龙')).toBe(true)
+    expect(cmd('/画   一条龙  ')).toBe(true)
+    expect(cmd('画 no')).toBe(false) // the mode declined it
+    expect(cmd('hello')).toBe(false)
+    expect(seen).toEqual(['draw:画|一条龙', 'draw:/画|一条龙', 'draw:画|no'])
+    await r.service.enter('other')
+    seen.length = 0
+    expect(cmd('画龙 x')).toBe(true) // the longer word is asked first (it declines), then the shorter word's mode takes it
+    expect(seen).toEqual(['other:画龙|x', 'draw:画|龙 x'])
+  })
+
+  it('a chat command handler that throws is logged and the message stays chat', async () => {
+    const r = await rig({
+      modes: [
+        {
+          pack: pack('draw', { triggers: { danmaku_prefix: ['画'] } }),
+          controller: {
+            onChatCommand: () => {
+              throw new Error('broke')
+            },
+          },
+        },
+      ],
+    })
+    await r.service.enter('draw')
+    expect(
+      r.service.chatCommand({ uid: 1, uname: 'a', text: '画 x', admin: false, owner: false })
+    ).toBe(false)
+  })
+
   it('renders a pack prompt on request', async () => {
     const r = await rig({
       modes: [{ pack: pack('dance', {}, { outro: 'Finished "{{title}}"{{who}}.' }) }],

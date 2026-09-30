@@ -148,6 +148,21 @@ export type SongCommand =
   | { kind: 'skip'; uid: number; name: string }
   | { kind: 'list'; uid: number; name: string }
 
+/**
+ * A chat message a mode may take for itself because it starts with one of the mode's command words (`画 …`).
+ * Text and name are already cleaned like every viewer text.
+ */
+export interface ChatCommandInput {
+  uid: number
+  uname: string
+  /** The whole cleaned message. */
+  text: string
+  /** True for a room moderator. */
+  admin: boolean
+  /** True for the room owner (the streamer). */
+  owner: boolean
+}
+
 export const DROP_REASONS = [
   // chat messages
   'ignored_uid',

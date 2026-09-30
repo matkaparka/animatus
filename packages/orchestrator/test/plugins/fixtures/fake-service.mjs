@@ -72,7 +72,8 @@ const killGrandchild = () => {
 
 function health(req, res) {
   const head = req.method === 'HEAD'
-  const answer = (status, body, type) => (head ? send(res, status, '', type) : send(res, status, body, type))
+  const answer = (status, body, type) =>
+    head ? send(res, status, '', type) : send(res, status, body, type)
   switch (mode) {
     case 'loading':
       return answer(200, { ok: true, ready: false, service: 'fake' })
@@ -95,7 +96,13 @@ function health(req, res) {
       return // never answers
     default: {
       const ready = !has('never-ready') && Date.now() - listeningSince >= readyAfter
-      return answer(200, { ok: true, ready, service: 'fake', version: '1.2.3', config: { flavour: 'test' } })
+      return answer(200, {
+        ok: true,
+        ready,
+        service: 'fake',
+        version: '1.2.3',
+        config: { flavour: 'test' },
+      })
     }
   }
 }
@@ -117,7 +124,13 @@ function readJson(req) {
 const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0]
   if (path === '/health') return health(req, res)
-  if (path === '/docs') return send(res, 200, '<!doctype html><html><body><h1>docs</h1></body></html>', 'text/html; charset=utf-8')
+  if (path === '/docs')
+    return send(
+      res,
+      200,
+      '<!doctype html><html><body><h1>docs</h1></body></html>',
+      'text/html; charset=utf-8'
+    )
   if (path === '/info') return send(res, 200, info())
   if (path === '/control' && req.method === 'POST') {
     const body = await readJson(req)
@@ -163,13 +176,21 @@ function afterListening() {
     // counts how many times this service has been started, whatever else it does
     const previous = existsSync(stateFile) ? Number(readFileSync(stateFile, 'utf8')) || 0 : 0
     writeFileSync(stateFile, String(previous + 1))
-    if (previous < Number(value('crash-first', '0'))) setTimeout(() => process.exit(1), Number(value('crash-after', '100')))
+    if (previous < Number(value('crash-first', '0')))
+      setTimeout(() => process.exit(1), Number(value('crash-after', '100')))
   }
-  if (has('exit-after')) setTimeout(() => process.exit(Number(value('exit-code', '1'))), Number(value('exit-after', '0')))
+  if (has('exit-after'))
+    setTimeout(
+      () => process.exit(Number(value('exit-code', '1'))),
+      Number(value('exit-after', '0'))
+    )
 }
 
 if (has('no-listen')) {
   setInterval(() => {}, 1000)
 } else {
-  setTimeout(() => server.listen(port, '127.0.0.1', afterListening), Number(value('startup-delay', '0')))
+  setTimeout(
+    () => server.listen(port, '127.0.0.1', afterListening),
+    Number(value('startup-delay', '0'))
+  )
 }

@@ -38,6 +38,7 @@ import {
   PRIORITY,
   type Batch,
   type BatchPart,
+  type ChatCommandInput,
   type DanmakuInput,
   type DropHandler,
   type DropInfo,
@@ -83,6 +84,11 @@ export interface RouterOptions {
   onDrop?: DropHandler
   /** Called for each song command found in chat. Without a handler, commands are logged and discarded. */
   onSongCommand?: (cmd: SongCommand) => void
+  /**
+   * Asked about every chat message after the song commands and before the ordinary filters: true means a mode took
+   * it as its own command (it is then not chat any more), false lets it go on as chat. Must be quick and must not throw.
+   */
+  onChatCommand?: (cmd: ChatCommandInput) => boolean
 }
 
 export interface RouterStats {
@@ -147,6 +153,7 @@ export class Router {
   readonly config: InboxConfig
   onDrop: DropHandler | undefined
   onSongCommand: ((cmd: SongCommand) => void) | undefined
+  onChatCommand: ((cmd: ChatCommandInput) => boolean) | undefined
 
   private readonly now: () => number
   private readonly log: InboxLogger
@@ -176,6 +183,7 @@ export class Router {
     this.log = options.log ?? (() => {})
     this.onDrop = options.onDrop
     this.onSongCommand = options.onSongCommand
+    this.onChatCommand = options.onChatCommand
     this.ignoreUids = new Set(this.config.ignoreUids)
     this.danceGifts = new Set(this.config.dance.gifts)
     this.ownerUids = new Set(this.config.singing.ownerUids)
@@ -251,6 +259,7 @@ export class Router {
     ) {
       return
     }
+    if (dmType !== 1 && this.onChatCommand && this.chatCommand(uid, uname, text, ev)) return
     if (dmType === 1) return drop('emote_sticker')
     const key = normKey(text)
     if (key === '') return drop('pure_emote')
@@ -361,6 +370,26 @@ export class Router {
   addSongLine(text: string): void {
     this.push({ prio: PRIORITY.SONG, kind: 'song', ts: this.now(), text })
     this.log('info', 'queued song line', { text })
+  }
+
+  // ---- commands of modes
+
+  /** True when a mode took the message as its own command. A handler that throws is logged and the message goes on as chat. */
+  private chatCommand(uid: number, uname: string, text: string, ev: DanmakuInput): boolean {
+    try {
+      return (
+        this.onChatCommand?.({
+          uid,
+          uname,
+          text,
+          admin: ev.admin ?? false,
+          owner: this.ownerUids.has(uid) || (Boolean(ev.roomOwnerUid) && uid === ev.roomOwnerUid),
+        }) === true
+      )
+    } catch (error) {
+      this.log('error', 'chat command handler threw', { error })
+      return false
+    }
   }
 
   // ---- song commands
