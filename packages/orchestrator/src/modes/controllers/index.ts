@@ -3,6 +3,7 @@ import type { ControllerFactory } from '../host.ts'
 import { createCommentaryController } from './commentary.ts'
 import { createDanceController } from './dance.ts'
 import { createDrawController } from './draw.ts'
+import { createGameController } from './game.ts'
 import { createSingController } from './sing.ts'
 import { createSleepController } from './sleep.ts'
 
@@ -10,6 +11,7 @@ export const builtinControllers: Readonly<Record<string, ControllerFactory>> = {
   commentary: createCommentaryController,
   dance: createDanceController,
   draw: (host) => createDrawController(host),
+  game: (host) => createGameController(host),
   sing: createSingController,
   sleep: createSleepController,
 }

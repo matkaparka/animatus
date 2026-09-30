@@ -60,6 +60,13 @@ export interface WorkerHttpOptions {
 
 const MAX_BODY_BYTES = 1_000_000
 
+/** The older link's refusals carry their words in `reason`: `{ "ok": false, "reason": "game not connected" }`. */
+function reasonOf(json: unknown): string | null {
+  const reason =
+    typeof json === 'object' && json !== null ? (json as { reason?: unknown }).reason : null
+  return typeof reason === 'string' && reason.trim() !== '' ? reason.trim().slice(0, 300) : null
+}
+
 /** One call: the method and path, a JSON body for POST, the time limit, and the answer as parsed JSON. */
 export class WorkerHttp {
   private readonly base: string
@@ -128,8 +135,11 @@ export class WorkerHttp {
 
   private failure(status: number, json: unknown): WorkerError {
     const body = WorkerErrorBody.safeParse(json)
-    // the worker's own words are shown; a body of another shape says only the status
-    const said = body.success ? body.data.message : `the worker answered ${status}`
+    // the worker's own words are shown (the older link says `reason` where the protocol says `message`); a body of another
+    // shape says only the status
+    const said = body.success
+      ? body.data.message
+      : (reasonOf(json) ?? `the worker answered ${status}`)
     if (status === 409) return new WorkerError('not_online', said, status)
     if (status === 400) return new WorkerError('bad_request', said, status)
     if (status === 413) return new WorkerError('too_large', said, status)

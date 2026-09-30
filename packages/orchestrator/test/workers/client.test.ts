@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorkerClient, WorkerError, WorkerFeed } from '../../src/workers/index.ts'
+import type { WorkerApi } from '../../src/workers/index.ts'
 import { fakeWorker } from './fakes.ts'
 
 const open: { close(): Promise<void> }[] = []
@@ -207,5 +208,56 @@ describe('reading the events of a worker', () => {
     w.s.misbehave.hang = false
     w.push('n', 'b')
     expect((await feed.poll()).events.map((e) => e.text)).toEqual(['b'])
+  })
+
+  /** A worker whose second page of events (the one that starts after event 50) fails once. */
+  const failsOnSecondPage = (real: WorkerClient): WorkerApi => {
+    let armed = true
+    return {
+      kind: 'worker',
+      state: () => real.state(),
+      events: async (after, epoch) => {
+        if (after === 50 && armed) {
+          armed = false
+          throw new WorkerError('timeout', 'the second page did not arrive')
+        }
+        return real.events(after, epoch)
+      },
+      command: (t) => real.command(t),
+      pause: (p) => real.pause(p),
+      forget: () => real.forget(),
+      trace: (n) => real.trace(n),
+    }
+  }
+
+  it('a read that fails after its first page changes nothing: the next poll gets all of it, and still the news of the restart', async () => {
+    // The first page had already moved the cursor when the second failed: the events of the first page were thrown away
+    // with the error, and the restart (the epoch had changed, and was remembered) was never reported.
+    const w = await worker()
+    const feed = new WorkerFeed(failsOnSecondPage(client(w.url)))
+    for (let i = 1; i <= 3; i++) w.push('n', `old ${i}`)
+    expect((await feed.poll()).events).toHaveLength(3) // page one of the first read: it works
+    w.restart()
+    for (let i = 1; i <= 130; i++) w.push('n', `new ${i}`)
+    const before = feed.position
+    expect((await failure(feed.poll())).code).toBe('timeout') // page two of this read
+    expect(feed.position).toEqual(before)
+    const p = await feed.poll()
+    expect(p.reset).toBe(true)
+    expect(p.events).toHaveLength(130)
+    expect(p.events[0]?.text).toBe('new 1')
+    expect(p.events.at(-1)?.text).toBe('new 130')
+    expect(p.epoch).toBe(w.s.epoch)
+    expect((await feed.poll()).events).toEqual([])
+  })
+
+  it('the same for a backlog that is not a restart: nothing skipped, nothing twice', async () => {
+    const w = await worker()
+    const feed = new WorkerFeed(failsOnSecondPage(client(w.url)))
+    for (let i = 1; i <= 120; i++) w.push('n', `event ${i}`)
+    expect((await failure(feed.poll())).code).toBe('timeout')
+    expect(feed.position.cursor).toBe(0)
+    const p = await feed.poll()
+    expect(p.events.map((e) => e.seq)).toEqual(Array.from({ length: 120 }, (_, i) => i + 1))
   })
 })

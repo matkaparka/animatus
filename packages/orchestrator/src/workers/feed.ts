@@ -41,26 +41,34 @@ export class WorkerFeed {
     return { epoch: this.epoch, cursor: this.cursor }
   }
 
-  /** What is new since the last call. Throws what the worker's client throws (a `WorkerError`). */
+  /**
+   * What is new since the last call. Throws what the worker's client throws (a `WorkerError`), and then the position is
+   * exactly what it was: a read that fails after its first page must not have moved the cursor past events it never
+   * handed on, nor swallowed the news of a restart (the new epoch would have been remembered with no `reset` ever reported).
+   */
   async poll(): Promise<Polled> {
+    let epoch = this.epoch
+    let cursor = this.cursor
     let events: WorkerEvent[] = []
     let reset = false
     for (let page = 0; page < MAX_PAGES_PER_POLL; page++) {
-      const r = await this.api.events(this.cursor, this.epoch)
+      const r = await this.api.events(cursor, epoch)
       if (r.reset) {
         // another run: what was read of the old one is void, and so is the cursor
         reset = true
         events = []
-        this.cursor = 0
+        cursor = 0
       }
-      this.epoch = r.epoch
+      epoch = r.epoch
       for (const e of r.events) {
-        if (e.seq <= this.cursor) continue // a repeat: the cursor is the reader's, not the worker's
+        if (e.seq <= cursor) continue // a repeat: the cursor is the reader's, not the worker's
         events.push(e)
-        this.cursor = e.seq
+        cursor = e.seq
       }
       if (!r.more || r.events.length === 0) break
     }
-    return { events, reset, epoch: this.epoch as string }
+    this.epoch = epoch
+    this.cursor = cursor
+    return { events, reset, epoch: epoch as string }
   }
 }
