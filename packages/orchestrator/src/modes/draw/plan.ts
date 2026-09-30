@@ -184,14 +184,23 @@ export function createPlanner(host: ModeHost, cfg: DrawSettings): Planner {
     signal: AbortSignal
   ): Promise<Record<string, unknown> | null> {
     for (let i = 0; i < 2; i++) {
-      const reply = await host.llmText({
-        tag,
-        system: `${system}\n\n${rules()}`,
-        user,
-        temperature: 0.2,
-        timeoutMs: cfg.plan_timeout_sec * 1000,
-        signal,
-      })
+      let reply: string
+      try {
+        reply = await host.llmText({
+          tag,
+          system: `${system}\n\n${rules()}`,
+          user,
+          temperature: 0.2,
+          timeoutMs: cfg.plan_timeout_sec * 1000,
+          signal,
+        })
+      } catch (e) {
+        if (signal.aborted) throw e
+        // a model that cannot be reached is a fault to report, never a refusal to draw
+        throw new PlanError(
+          `the model could not plan the picture: ${(e instanceof Error ? e.message : String(e)).split(/\r?\n/, 1)[0]}`
+        )
+      }
       const obj = parseJsonObject(reply)
       if (obj) return obj
     }
