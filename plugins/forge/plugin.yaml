@@ -1,0 +1,68 @@
+manifest_version: 1
+id: forge
+title: Image generation (Forge)
+description: >-
+  Draws pictures on a Forge (Stable Diffusion WebUI) server that you start yourself with --api. This service does
+  not plan and never calls a model: the draw mode plans. It checks every request (blocklist, forced safe tags), runs
+  one generation at a time and looks at every picture with a rating model before it leaves.
+version: 0.1.0
+kind: image
+service: forge
+provides: [image.txt2img]
+
+runtime:
+  type: process
+  env: light
+  command:
+    - "{python}"
+    - service.py
+    - --port
+    - "{port}"
+    - --data-dir
+    - "{data_dir}"
+    - --settings
+    - "{config.settings_file}"
+    - --max-long-side
+    - "{config.max_long_side}"
+  cwd: "{plugin_dir}"
+  port: auto
+  guard: true
+  stop:
+    http: { method: POST, path: /shutdown }
+    grace_ms: 15000
+
+health:
+  # 200 ready:false while the rating model is fetched (the first start downloads about 400 MB); 503 when a safety layer is broken.
+  http: { path: /health }
+  start_timeout_ms: 600000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+restart:
+  policy: on-failure
+  max_restarts: 3
+  backoff_ms: [1000, 5000, 15000]
+
+resources:
+  gpu: true
+  vram_mb_est: null          # not measured for this service's own settings; run the probe (docs/modes.md)
+  config_keys: [max_long_side]
+  note: The memory is Forge's, not the service's; it depends on the checkpoint and on max_long_side.
+
+config_schema:
+  type: object
+  required: [settings_file, max_long_side]
+  properties:
+    settings_file:
+      type: string
+      title: Settings file
+      description: The YAML file with the safety families, allowlists and limits (start from plugins/forge/settings.example.yaml).
+    max_long_side:
+      type: integer
+      title: Longest side of a picture
+      description: A multiple of 64 from 512 to 2048. The mode's panel can change it while the program runs.
+      default: 1024
+      minimum: 512
+      maximum: 2048
+      multipleOf: 64
