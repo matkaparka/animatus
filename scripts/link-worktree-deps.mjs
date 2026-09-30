@@ -4,6 +4,7 @@
 //   git worktree add ../animatus-work -b work
 //   cd ../animatus-work
 //   node scripts/link-worktree-deps.mjs            (the main checkout is found through git)
+//   node scripts/link-worktree-deps.mjs --unlink   before `git worktree remove`: takes the links away first
 //
 // The worktree gets its own node_modules whose entries are directory junctions to the main checkout's installed
 // packages, except `@animatus/*`, which point at THIS worktree's packages: an edit to packages/protocol here is
@@ -42,6 +43,25 @@ const isLink = (p) => {
   } catch {
     return false
   }
+}
+
+// Removing a worktree that still holds junctions can follow them into the main checkout's node_modules, so the
+// links are taken away first, one by one, each as a link (never recursively).
+if (process.argv.includes('--unlink')) {
+  const drop = (p) => {
+    if (isLink(p)) rmSync(p, { recursive: false, force: true })
+  }
+  const nm = join(here, 'node_modules')
+  if (existsSync(nm)) {
+    const scope = join(nm, '@animatus')
+    if (existsSync(scope) && !isLink(scope)) for (const e of readdirSync(scope)) drop(join(scope, e))
+    for (const e of readdirSync(nm)) drop(join(nm, e))
+  }
+  const packagesDir = join(here, 'packages')
+  for (const d of readdirSync(packagesDir, { withFileTypes: true }))
+    if (d.isDirectory()) drop(join(packagesDir, d.name, 'node_modules'))
+  console.log('Links removed; the worktree can be removed now.')
+  process.exit(0)
 }
 
 const mainModules = join(main, 'node_modules')
