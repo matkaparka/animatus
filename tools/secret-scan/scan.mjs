@@ -37,8 +37,26 @@ function loadIgnore() {
     .map(globToRegExp)
 }
 
+/**
+ * The private deny list lives in the main checkout's .private/ (untracked). A linked worktree has no .private/ of its
+ * own, so fall back to the main checkout's, found through the shared git directory.
+ */
+function privateFile(name) {
+  const local = resolve(root, '.private', name)
+  if (existsSync(local)) return local
+  try {
+    const common = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
+    const main = resolve(root, common, '..')
+    const p = resolve(main, '.private', name)
+    if (existsSync(p)) return p
+  } catch {
+    // not a git checkout: only the local path counts
+  }
+  return local
+}
+
 function loadDenyTerms() {
-  const p = resolve(root, '.private', 'deny-terms.txt')
+  const p = privateFile('deny-terms.txt')
   if (!existsSync(p)) return []
   return readFileSync(p, 'utf8')
     .split(/\r?\n/)
