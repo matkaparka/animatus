@@ -339,6 +339,59 @@ describe('entering and leaving', () => {
   })
 })
 
+describe('panels', () => {
+  it('shows what the controller gives, with the defaults filled in, and nothing for a mode that gives none', async () => {
+    const r = await rig({
+      modes: [
+        {
+          pack: pack('a'),
+          controller: {
+            panel: () => ({
+              status: 'ready',
+              actions: [{ id: 'stop', label: 'Stop' }],
+              sections: [{ title: 'Songs', rows: [{ id: '1', text: 'one' }] }],
+            }),
+          },
+        },
+        { pack: pack('b'), controller: {} },
+        { pack: pack('c'), enabled: false },
+      ],
+    })
+    const [a, b, c] = r.service.views()
+    expect(a!.panel).toMatchObject({
+      status: 'ready',
+      facts: [],
+      actions: [{ id: 'stop', inputs: [] }],
+    })
+    expect(a!.panel!.sections[0]!.rows[0]).toMatchObject({ id: '1', active: false, actions: [] })
+    expect(b!.panel).toBeUndefined()
+    expect(c!.panel).toBeUndefined()
+  })
+
+  it('a controller whose panel is nonsense or throws shows no panel, and the views still come', async () => {
+    const r = await rig({
+      modes: [
+        {
+          pack: pack('a'),
+          controller: { panel: () => ({ actions: [{ id: 'Not An Id', label: 'x' }] }) as never },
+        },
+        {
+          pack: pack('b'),
+          controller: {
+            panel: () => {
+              throw new Error('panel broke')
+            },
+          },
+        },
+        { pack: pack('c'), controller: { panel: () => null } },
+      ],
+    })
+    const views = r.service.views()
+    expect(views.map((v) => v.panel)).toEqual([undefined, undefined, undefined])
+    expect(views).toHaveLength(3)
+  })
+})
+
 describe('prompts and hooks', () => {
   it('sends the active prompt of a running mode, and the advertisement of an idle one with its variables filled in', async () => {
     const r = await rig({

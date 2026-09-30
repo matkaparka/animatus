@@ -8,6 +8,7 @@
  * before the model does.
  */
 import { EventEmitter } from 'node:events'
+import { ModePanel } from '@animatus/protocol'
 import type { ModeManifest, ModeView, VerdictView, VramMeasurement } from '@animatus/protocol'
 import { AppError } from '../app/errors.ts'
 import { renderTemplate } from '../brain/prompt.ts'
@@ -249,6 +250,7 @@ export class ModeService extends EventEmitter<Events> {
     }
     const slot = this.manager.snapshot().find((s) => s.id === id)
     const alone = matrix.alone[id]
+    const panel = this.panelOf(id)
     const pairs: Record<string, VerdictView> = {}
     for (const [other, verdict] of Object.entries(matrix.pairs[id] ?? {})) {
       if (!verdict.ok) pairs[other] = this.verdictView(verdict)
@@ -259,7 +261,27 @@ export class ModeService extends EventEmitter<Events> {
       since: slot?.since ?? this.startedAt,
       ...(alone ? { admission: this.verdictView(alone) } : {}),
       pairs,
+      ...(panel ? { panel } : {}),
     }
+  }
+
+  /** The controller's panel, checked; a controller that throws or answers nonsense shows no panel and is logged. */
+  private panelOf(id: string): ModePanel | undefined {
+    const c = this.controllers.get(id)
+    if (!c?.panel) return undefined
+    try {
+      const raw = c.panel()
+      if (!raw) return undefined
+      const parsed = ModePanel.safeParse(raw)
+      if (parsed.success) return parsed.data
+      this.log(
+        'warn',
+        `modes: ${id} gave a panel the console cannot show: ${parsed.error.issues[0]?.message}`
+      )
+    } catch (e) {
+      this.log('warn', `modes: ${id} could not make its panel: ${(e as Error).message}`)
+    }
+    return undefined
   }
 
   views(): ModeView[] {

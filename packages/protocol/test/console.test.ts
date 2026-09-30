@@ -12,7 +12,9 @@ import {
   EventsResponse,
   InjectRequest,
   ModeAction,
+  ModePanel,
   ModeRequest,
+  ModeView,
   ModesResponse,
   OkResponse,
   PluginAction,
@@ -60,6 +62,70 @@ describe('console API schemas', () => {
     const many = Object.fromEntries(Array.from({ length: 17 }, (_, i) => ['k' + i, i]))
     expect(ModeRequest.safeParse({ params: many }).success).toBe(false)
     expect(ModeRequest.safeParse({ params: { ['k'.repeat(41)]: 1 } }).success).toBe(false)
+  })
+
+  it('a mode panel fills in what is left out and refuses what the console cannot draw', () => {
+    const p = ModePanel.parse({
+      status: 'ready',
+      actions: [{ id: 'stop', label: 'Stop' }],
+      sections: [
+        {
+          title: 'Songs',
+          rows: [
+            {
+              id: 'a',
+              text: 'A song',
+              actions: [{ id: 'skip', label: 'Skip', confirm: 'Skip it?' }],
+            },
+          ],
+        },
+      ],
+    })
+    expect(p.facts).toEqual([])
+    expect(p.actions[0]).toEqual({ id: 'stop', label: 'Stop', inputs: [] })
+    expect(p.sections[0]!.rows[0]).toMatchObject({ active: false })
+    expect(ModePanel.parse({}).sections).toEqual([])
+    const withInput = ModePanel.safeParse({
+      actions: [
+        {
+          id: 'size',
+          label: 'Set',
+          inputs: [
+            {
+              name: 'side',
+              label: 'Longest side',
+              kind: 'number',
+              min: 512,
+              step: 64,
+              value: 1024,
+            },
+          ],
+        },
+      ],
+    })
+    expect(withInput.success).toBe(true)
+    for (const bad of [
+      { actions: [{ id: 'Bad Id', label: 'x' }] },
+      { actions: [{ id: 'ok', label: 'x', inputs: [{ name: 'a', label: 'a', kind: 'colour' }] }] },
+      { actions: Array.from({ length: 13 }, (_, i) => ({ id: 'a' + i, label: 'x' })) },
+      { sections: [{ title: 't', rows: [{ id: '', text: 'x' }] }] },
+      { facts: [{ label: 'x'.repeat(61), value: 'v' }] },
+    ])
+      expect(ModePanel.safeParse(bad).success, JSON.stringify(bad)).toBe(false)
+  })
+
+  it('a mode view carries an optional panel', () => {
+    const base = {
+      id: 'dance',
+      title: 'Dance',
+      state: 'IDLE',
+      since: 1,
+      priority: 60,
+      exclusive_with: [],
+      services: [],
+    }
+    expect(ModeView.parse(base).panel).toBeUndefined()
+    expect(ModeView.parse({ ...base, panel: { status: 'ready' } }).panel?.status).toBe('ready')
   })
 
   it('StatusView accepts a minimal status', () => {

@@ -79,6 +79,75 @@ export const VerdictView = z.object({
 })
 export type VerdictView = z.infer<typeof VerdictView>
 
+/**
+ * What a mode shows the operator and lets them do, as data: the console draws it without knowing the mode. A
+ * button (an action, alone or on a row) sends `POST /api/modes/:id/act` with `params.action` set to the action's
+ * id, `params.row` set to the row's id for a row action, and one param per input.
+ */
+export const PanelInput = z.object({
+  name: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
+  label: z.string().max(60),
+  kind: z.enum(['text', 'number', 'select', 'toggle']),
+  /** What the field starts with. */
+  value: z.union([z.string().max(200), z.number(), z.boolean()]).optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  step: z.number().optional(),
+  placeholder: z.string().max(100).optional(),
+  /** For `select`. */
+  options: z
+    .array(z.object({ value: z.string().max(200), label: z.string().max(100) }))
+    .max(200)
+    .optional(),
+})
+export type PanelInput = z.infer<typeof PanelInput>
+
+export const PanelAction = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
+  label: z.string().max(60),
+  inputs: z.array(PanelInput).max(8).default([]),
+  /** Why it cannot be used right now. The button is off and this is shown next to it. */
+  disabled: z.string().max(200).optional(),
+  /** Ask before doing it (it stops something, deletes something). */
+  confirm: z.string().max(200).optional(),
+})
+export type PanelAction = z.infer<typeof PanelAction>
+
+export const PanelRow = z.object({
+  id: z.string().min(1).max(120),
+  text: z.string().max(300),
+  detail: z.string().max(300).optional(),
+  /** Marks the row that is current (the song playing, the dance chosen). */
+  active: z.boolean().default(false),
+  actions: z.array(PanelAction).max(4).default([]),
+})
+export type PanelRow = z.infer<typeof PanelRow>
+
+export const PanelSection = z.object({
+  title: z.string().max(80),
+  rows: z.array(PanelRow).max(100).default([]),
+  /** Shown when there are no rows. */
+  empty: z.string().max(200).optional(),
+})
+export type PanelSection = z.infer<typeof PanelSection>
+
+export const ModePanel = z.object({
+  /** One line on what the mode is doing. */
+  status: z.string().max(300).optional(),
+  facts: z
+    .array(z.object({ label: z.string().max(60), value: z.string().max(200) }))
+    .max(20)
+    .default([]),
+  /** A picture to show, as an asset URL (the last drawing). */
+  image: z.string().max(2048).optional(),
+  actions: z.array(PanelAction).max(12).default([]),
+  sections: z.array(PanelSection).max(6).default([]),
+})
+export type ModePanel = z.infer<typeof ModePanel>
+/** What a controller writes: fields with defaults may be left out; the mode service fills them in. */
+export type ModePanelInput = z.input<typeof ModePanel>
+export type PanelActionInput = z.input<typeof PanelAction>
+
 export const ModeView = z.object({
   id: z.string(),
   title: z.string(),
@@ -94,6 +163,8 @@ export const ModeView = z.object({
   admission: VerdictView.optional(),
   /** Modes that cannot run together with this one because of memory, keyed by mode id. */
   pairs: z.record(z.string(), VerdictView).default({}),
+  /** What the mode itself shows and offers (its own controller decides); absent for a mode that has nothing to add. */
+  panel: ModePanel.optional(),
 })
 export type ModeView = z.infer<typeof ModeView>
 

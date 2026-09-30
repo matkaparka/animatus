@@ -6,7 +6,7 @@
  * hold the voice, ask the model, read the configuration, raise an alarm). That keeps modes testable with
  * a handful of fakes and keeps the App free of mode-specific code.
  */
-import type { ClipRef, Emotion, RunEvent } from '@animatus/protocol'
+import type { ClipRef, Emotion, ModePanelInput, RunEvent } from '@animatus/protocol'
 import type { AppConfig } from '../config.ts'
 import type { Batch, SongCommand } from '../inbox/types.ts'
 import type { ChatPart } from '../llm/types.ts'
@@ -145,6 +145,12 @@ export interface ModeControllerHooks {
   onModelRequest?(request: { name?: string }): Promise<void> | void
   /** The operator asked for the mode from the console, with optional details. */
   onConsoleRequest?(request: Record<string, unknown>): Promise<{ ok: boolean; reason?: string }>
+  /**
+   * What the console shows for this mode besides its state: facts, buttons, lists (see `ModePanel`). Called every
+   * time the console asks for the modes, so it must be quick and must not throw; whatever the operator presses comes
+   * back through `onConsoleRequest` with `action` (and `row`) set to the ids given here.
+   */
+  panel?(): ModePanelInput | null
   /** A viewer's song command was found in chat (request, skip, list, ...). Return true when this mode took it. */
   onSongCommand?(command: SongCommand): Promise<boolean> | boolean
 }

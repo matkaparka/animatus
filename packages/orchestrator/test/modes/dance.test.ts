@@ -567,6 +567,81 @@ describe('the console', () => {
   })
 })
 
+describe('the console panel', () => {
+  const panel = (r: Rig) => r.service.viewOf('dance').panel!
+  const rowOf = (r: Rig, name: string) => panel(r).sections[0]!.rows.find((x) => x.id === name)!
+
+  it('lists every dance folder, switched off ones marked, with play and trial buttons; tuning and stop are off until something runs', async () => {
+    const r = await rig({
+      dances: [dance('aipao', { bpm: 141 }), dance('old', { enabled: false })],
+    })
+    await tick(20)
+    const p = panel(r)
+    expect(p.status).toBe('ready')
+    expect(p.sections[0]!.rows.map((x) => x.id)).toEqual(['aipao', 'old'])
+    expect(rowOf(r, 'aipao').detail).toContain('141 BPM')
+    expect(rowOf(r, 'old').detail).toContain('switched off')
+    expect(rowOf(r, 'aipao').actions.map((a) => [a.id, a.disabled])).toEqual([
+      ['play', undefined],
+      ['trial', undefined],
+    ])
+    const [stop, tune] = p.actions
+    expect(stop).toMatchObject({ id: 'stop', disabled: 'no dance is running' })
+    expect(tune).toMatchObject({ id: 'tune', disabled: 'no dance is playing' })
+    expect(tune!.inputs.map((i) => i.name)).toEqual(['offset', 'speed'])
+  })
+
+  it('while a dance runs: the row is marked, the buttons say why they are off, stop and tune work, and the panel shows the tuned numbers', async () => {
+    const r = await rig({ dances: [dance('aipao', { offset: 1, speed: 1 }), dance('otagei')] })
+    await tick(20)
+    expect(await r.ctl.onConsoleRequest!({ action: 'play', row: 'aipao' })).toEqual({ ok: true })
+    await tick(100)
+    const p = panel(r)
+    expect(p.status).toContain('dancing "aipao"')
+    expect(rowOf(r, 'aipao').active).toBe(true)
+    expect(rowOf(r, 'otagei').active).toBe(false)
+    expect(rowOf(r, 'otagei').actions[0]!.disabled).toBe('a dance is already running')
+    expect(p.actions.map((a) => [a.id, a.disabled])).toEqual([
+      ['stop', undefined],
+      ['tune', undefined],
+    ])
+    expect(await r.ctl.onConsoleRequest!({ action: 'tune', offset: 2, speed: 1.1 })).toEqual({
+      ok: true,
+    })
+    const tune = panel(r).actions.find((a) => a.id === 'tune')!
+    expect(tune.inputs.map((i) => i.value)).toEqual([2, 1.1])
+    expect(await r.ctl.onConsoleRequest!({ action: 'stop' })).toEqual({ ok: true })
+    await tick(50)
+    expect(r.hub.sent.find((m) => m.type === 'dance.stop')).toBeTruthy()
+    expect(panel(r).status).toContain('resting')
+    expect(await r.ctl.onConsoleRequest!({ action: 'stop' })).toEqual({
+      ok: false,
+      reason: 'no dance is running',
+    })
+  })
+
+  it('a trial button plays without a closing line; stop withdraws a dance that is still waiting for the speech', async () => {
+    const r = await rig()
+    await tick(20)
+    expect(await r.ctl.onConsoleRequest!({ action: 'trial', row: 'otagei' })).toEqual({ ok: true })
+    await tick(100)
+    await tick(30_000)
+    await tick(50)
+    expect(r.told).toEqual([])
+    expect(r.ctl.status().cooldownLeft).toBe(0)
+
+    let spoken!: () => void
+    r.quiet.wait = new Promise((res) => (spoken = res))
+    expect(await r.ctl.onConsoleRequest!({ action: 'play', row: 'aipao' })).toEqual({ ok: true })
+    expect(panel(r).status).toContain('waiting for the reply')
+    expect(await r.ctl.onConsoleRequest!({ action: 'stop' })).toEqual({ ok: true })
+    spoken()
+    await tick(200)
+    expect(r.hub.sent.filter((m) => m.type === 'dance.play')).toHaveLength(1) // only the trial
+    expect(r.flags.dancing).toBe(false)
+  })
+})
+
 describe('what the model and the audience are told', () => {
   it('advertises the dances before she has danced, the cooldown after, nothing while it runs or while she sleeps', async () => {
     const r = await rig({ settings: { cooldown_sec: 300, outro_window_sec: 1 } })

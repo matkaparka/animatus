@@ -12,6 +12,7 @@
  */
 import path from 'node:path'
 import { z } from 'zod'
+import type { ModePanelInput, PanelActionInput } from '@animatus/protocol'
 import type { Batch } from '../../inbox/types.ts'
 import { toDancePlay } from '../../library/motionLibrary.ts'
 import type { DanceInfo } from '../../library/motionLibrary.ts'
@@ -92,6 +93,8 @@ export function createDanceController(
   let outroTimer: NodeJS.Timeout | null = null
   /** The dances the advertisement names, refreshed ahead of time because `advertise` has to answer at once. */
   let advertised: DanceInfo[] = []
+  /** Every dance folder, switched off or not, for the console's list. */
+  let known: DanceInfo[] = []
 
   /** Reads the saved state once; every caller waits for the same read, so nothing can run on half-loaded state. */
   const load = (): Promise<void> =>
@@ -263,7 +266,11 @@ export function createDanceController(
       }
       host.hub.on('dance.state', onState)
       void load()
-      const refresh = () => void enabledDances().then((l) => (advertised = l))
+      const refresh = () =>
+        void allDances().then((all) => {
+          known = all
+          advertised = all.filter((d) => d.meta.enabled)
+        })
       refresh()
       const timer = setInterval(refresh, 15_000)
       timer.unref?.()
@@ -386,8 +393,105 @@ export function createDanceController(
       host.event('mode', `the model asked for a dance${name ? ` (${name})` : ''} -> ${result}`)
     },
 
+    panel(): ModePanelInput {
+      const running = phase === 'pending' || phase === 'loading' || phase === 'playing'
+      const left = cooldownLeft()
+      const status =
+        phase === 'pending'
+          ? `waiting for the reply to be spoken, then "${current?.title}"`
+          : phase === 'loading' || phase === 'playing'
+            ? `dancing "${current?.title}"${requester ? ` (asked by ${requester})` : ''}`
+            : phase === 'after'
+              ? 'finished; the closing line is being said'
+              : left > 0
+                ? `resting: the next dance can be asked for in ${Math.ceil(left)} s`
+                : 'ready'
+      const tuned = current ? tuning[current.name] : undefined
+      const stop: PanelActionInput = {
+        id: 'stop',
+        label: 'Stop the dance',
+        confirm: 'Stop the dance now? There will be no closing line.',
+        ...(running ? {} : { disabled: 'no dance is running' }),
+      }
+      const tune: PanelActionInput = {
+        id: 'tune',
+        label: 'Tune the running dance',
+        inputs: [
+          {
+            name: 'offset',
+            label: 'Motion offset (s)',
+            kind: 'number',
+            min: -30,
+            max: 30,
+            step: 0.05,
+            value: tuned?.offset ?? current?.meta.offset ?? 0,
+          },
+          {
+            name: 'speed',
+            label: 'Speed',
+            kind: 'number',
+            min: 0.25,
+            max: 3,
+            step: 0.01,
+            value: tuned?.speed ?? current?.meta.speed ?? 1,
+          },
+        ],
+        ...(phase === 'playing' || phase === 'loading' ? {} : { disabled: 'no dance is playing' }),
+      }
+      const busyWhy =
+        running || phase === 'ending' || phase === 'after'
+          ? 'a dance is already running'
+          : undefined
+      return {
+        status,
+        facts: [
+          { label: 'Cooldown', value: `${cfg.cooldown_sec} s after each dance` },
+          ...(lastName ? [{ label: 'Last dance', value: lastName }] : []),
+        ],
+        actions: [stop, tune],
+        sections: [
+          {
+            title: 'Dances',
+            empty: 'No dance folders were found in the motion library (dance/<name>/motion.vrma).',
+            rows: known.map((d) => ({
+              id: d.name,
+              text: d.meta.title,
+              detail: `${d.name}${d.meta.enabled ? '' : ' - switched off in meta.json'}${d.meta.bpm ? `, ${d.meta.bpm} BPM` : ''}${d.music ? '' : ', no music'}`,
+              active: current?.name === d.name && phase !== 'idle',
+              actions: [
+                {
+                  id: 'play',
+                  label: 'Play',
+                  inputs: [],
+                  ...(busyWhy ? { disabled: busyWhy } : {}),
+                },
+                {
+                  id: 'trial',
+                  label: 'Trial run',
+                  inputs: [],
+                  ...(busyWhy ? { disabled: busyWhy } : {}),
+                },
+              ],
+            })),
+          },
+        ],
+      }
+    },
+
     async onConsoleRequest(req) {
       const action = typeof req.action === 'string' ? req.action : 'play'
+      if (action === 'stop') {
+        if (phase !== 'pending' && phase !== 'loading' && phase !== 'playing')
+          return { ok: false, reason: 'no dance is running' }
+        if (phase === 'pending') {
+          token++ // the request that is still waiting for the speech to end is withdrawn
+          idle()
+          host.event('mode', 'the waiting dance was withdrawn from the console')
+        } else {
+          await host.exitMode('dance', 'console')
+        }
+        return { ok: true }
+      }
       if (action === 'tune') {
         const name = current?.name
         if (!name || (phase !== 'playing' && phase !== 'loading'))
@@ -401,10 +505,13 @@ export function createDanceController(
         host.hub.send({ type: 'dance.tune', ...t })
         return { ok: true }
       }
+      // a button on a row of the list names the dance in `row`; the API can also send `name`
+      const name =
+        typeof req.row === 'string' ? req.row : typeof req.name === 'string' ? req.name : undefined
       const result = await request({
         source: 'console',
-        ...(typeof req.name === 'string' ? { name: req.name } : {}),
-        trial: req.trial === true,
+        ...(name !== undefined ? { name } : {}),
+        trial: req.trial === true || action === 'trial',
         replace: req.replace === true,
         force: req.force === true,
       })
