@@ -50,15 +50,16 @@ modes:
       whisper_style: whisper
 ```
 
-Without a `whisper` entry in `tts.styles` the mode still runs, but the speech service falls back to its default voice,
-so a whispered reply would be spoken normally in the middle of the night: an alarm (`sleep_whisper_style`) is raised the
+Without a `whisper` entry in `tts.styles` the mode still runs, but the built-in speech adapter falls back to its default
+voice, so a whispered reply would be spoken normally in the middle of the night: an alarm (`sleep_whisper_style`) is raised the
 moment the mode starts and stays until it ends, and the panel says so. Without a `night` background preset there is a
 `mode_stage_preset` alarm while the mode runs; the rest of the look still applies, and `dim` (below) darkens the stage
 without a picture.
 
 ## Settings (`modes.sleep.config`)
 
-A strict object: an unknown key or a value out of bounds stops the program at start-up with a message that names it.
+A strict object: with the mode switched on, an unknown key or a value out of bounds stops the program at start-up with a
+message that names it.
 
 | Key | Default | Bounds | Meaning |
 |---|---|---|---|
@@ -101,10 +102,10 @@ not used and the track plays without captions.
 **Entering** (console, hotkey `ctrl+alt+n`, or `POST /api/modes/sleep/enter`): the manager first interrupts every other
 mode. Then, in one step: `flags.sleeping` goes up (the pacer now serves only the one chat line at a time, marked `【助眠】`;
 paid messages, gifts and songs wait for the mode to end), what is being said stops, the voice style becomes `whisper`, and
-the first track is sent (`sleep.play`). The mode is active as soon as that is done (the framework then gives the stage the
-calm look from the pack); it does not wait for the stage to say the track is playing. The first track is the one after the last that played
-(remembered in `data/sleep-state.json`), so the next night does not always begin the same way; with `shuffle`, or a track
-named by the console, or `loop: false`, that rule is not used.
+the first track is sent (`sleep.play`). The mode is active as soon as that is done (the framework then gives the stage
+the calm look from the pack); it does not wait for the stage to say the track is playing. The first track is the one after
+the last that played (remembered in `data/sleep-state.json`), so the next night does not always begin the same way; with
+`shuffle`, or a track named by the console, or `loop: false`, that rule is not used.
 
 **The look** is the pack's `stage:` section, applied and taken away by the mode framework: `calm 1`, `motion_scale 1`,
 `mouth_scale 0.4`, `lip_range {min -2.6, max -1.0}` are the legacy values measured on a real whisper (0.4 for the motion
@@ -147,9 +148,9 @@ chat is answered, order), and four buttons: **Next track**, **Set the volume** (
 model) and **Stop sleep mode**; the tracks are a list with two buttons on each row: **Play now**, which also starts the
 mode from that track when it is not running, and **Skip**: on the track that is playing it moves on (as **Next track**
 does), on one that is still to come in this round it leaves that track out of the rest of the round (it is back in the
-next), and on any other it says why it is off. The volume of a track that is playing changes by a pause and a resume with a half-second
-fade (the stage has no live volume message), so it dips and swells back; a track that is loading or waiting for a reply
-gets the new volume when it plays or comes back.
+next), and on any other it says why it is off. The volume of a track that is playing changes by a pause and a resume with
+a half-second fade (the stage has no live volume message), so it dips and swells back; a track that is loading or waiting
+for a reply gets the new volume when it plays or comes back.
 
 Through the API (all `POST`, body `{ "params": { ... } }`, a refusal is HTTP 409 with the reason as its message):
 
@@ -198,6 +199,10 @@ else, or names a track that is gone is ignored. Nothing else is kept; the volume
   the real speech service or a real track.
 - `light 0.6` and `dim 0.4` of the look are not measured. The whisper voice's quality and loudness against the track are the
   operator's to judge; use the test-line button before going live.
+- A live whisper is the speech service speaking in the `whisper` reference recording, nothing more. The legacy voice bridge
+  also shifted the formants of a live whisper down two semitones (to match the track, which was pitched down in the studio)
+  and levelled it against the track; neither is done here, so a live whisper may sound a little different from the track. If
+  it does, give `whisper` a reference recording that is already pitched and levelled the way the tracks are.
 - The track is away for the whole reply and the quiet after it (a moment of quiet that the application waits for, then
   `reply_resume_delay_s`), not for the length of the audio alone. How long that feels was not measured.
 - Chat replies are the pacer's (`inbox.sleep`); to switch them off set `inbox.sleep.enabled: false` (the panel says so).
