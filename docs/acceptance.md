@@ -267,6 +267,43 @@ observer as its own part and the unified worker protocol are not yet.
   meant, and a model steered by the audience earlier in the conversation can misjudge a later moderator request; the
   streamer's yes is the safeguard for both.
 
+## P6: release
+
+Pass criterion (brief section 12): on a clean machine, following the documentation from zero, a basic chat works.
+
+- **A clean clone, by the documentation** ([getting-started.md](getting-started.md)). The committed state was cloned to a
+  new folder and, there: `npm install` (5 s with a warm npm cache), `npm run build` (2 s), `npm run typecheck` (clean),
+  `npm test` (161 files, 3820 tests passed and 33 skipped, 28 s; the skipped ones need the light Python environment, a
+  folder of motions or a live room that the clone does not have). Then `npm run setup` (answers piped in with
+  `--stdin`), `npm run doctor` (ready), `npm start`, and a first chat with the real Gemini, a real GPT-SoVITS and a real
+  Chrome stage window: an injected message became three spoken sentences with the subtitle, the face of the tagged
+  emotion and the mouth following the voice, and the stage reported the start of each sentence. That run used a sample
+  avatar (VRM 0), no motion folder and no lip-sync profile.
+- **What that run found, all fixed and covered by tests.** The setup did not ask for GPT-SoVITS's inference config
+  (`tts_config`), which the plugin requires, so the plugin failed on a placeholder in its command line: the setup and
+  the doctor know it now, the doctor names any enabled plugin's missing required setting, and the supervisor says
+  `plugins.<id>.config.<key> is not set: ...`. The speech plugin's job guard needed the light Python environment, so it
+  could not start without `uv sync`: the guard now runs on the plugin's own Python when the shared one is absent. A
+  fresh install stood in a T-pose (no motion library, so no idle pose): the stage builds a relaxed pose from code as
+  the fallback (the first version lifted the arms of a VRM 0 model, found on a screenshot of the real stage, and is
+  mirrored for VRM 0 now). An English question got an English answer through a Chinese voice: the setup asks for the
+  voice's language and the system prompt says which language to write in. A plain `npm install` rewrote the lockfile and
+  warned about esbuild's install script: the lockfile is refreshed and the script approved. Starting twice ended in a
+  raw `EADDRINUSE` stack: the message says which port and what to do.
+- **Scans**, over the whole tree: the secret scan and the asset scan are clean (629 files). The licence audit
+  (`npm run license-audit -- --strict`) covers 216 npm packages (31 that ship, 185 for building and testing only) and 70
+  Python distributions in the light environment, and nothing needs a look; the weak-copyleft ones (MPL-2.0: the
+  lightningcss builds, build only; certifi and tqdm in the Python environment) are listed in
+  [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md), and the six source files derived from another project carry its
+  notice.
+- **Not done.** The hidden key prompt in a real terminal: the setup was driven through `--stdin`, and the terminal path
+  asks the same questions with the echo switched off, which nobody has typed into. `npm install` with an empty npm
+  cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
+  previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A VRM 1 model on the real
+  stage (the tests use a stand-in; the run used VRM 0). A voice in another language than Chinese with the real
+  GPT-SoVITS: the setting is tested, the sound is not. Another Windows account: the encrypted key store belongs to the
+  account that wrote it.
+
 ## P0
 
 VRAM measurements are in [vram-measurements.md](vram-measurements.md).
