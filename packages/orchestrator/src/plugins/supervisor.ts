@@ -522,16 +522,29 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     if (!cwd?.isDirectory())
       throw new Error(`the working directory does not exist: ${resolved.cwd}`)
 
-    return { ...this.invocation(runtime, resolved.command), cwd: resolved.cwd, env, port }
+    return {
+      ...this.invocation(runtime, resolved.command, slot.config),
+      cwd: resolved.cwd,
+      env,
+      port,
+    }
   }
 
-  private invocation(runtime: ProcessRuntime, command: string[]): Invocation {
+  private invocation(
+    runtime: ProcessRuntime,
+    command: string[],
+    config: Readonly<Record<string, unknown>>
+  ): Invocation {
     const [file, ...args] = command
     if (file === undefined) throw new Error('runtime.command is empty')
     if (runtime.guard && IS_WINDOWS) {
-      const { python, script } = this.options.guard
-      if (!existsSync(python))
-        throw new Error(`the job guard interpreter does not exist: ${python}`)
+      const { python: light, script } = this.options.guard
+      const own = ownInterpreter(runtime.env, config, this.options.interpreters)
+      const python = guardInterpreter(light, own, existsSync)
+      if (python === null)
+        throw new Error(
+          `the job guard needs a Python interpreter, and ${light}${own && own !== light ? ` and ${own}` : ''} ${own && own !== light ? 'do' : 'does'} not exist (run \`uv sync\` in the repository folder)`
+        )
       if (!existsSync(script)) throw new Error(`the job guard script does not exist: ${script}`)
       return {
         file: python,
@@ -811,6 +824,36 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
     timer.abort() // cancels the pending sleep
     return run.exit !== undefined
   }
+}
+
+/** The Python a plugin runs on, when it is a Python plugin: what `{python}` in its command means. */
+export function ownInterpreter(
+  env: ProcessRuntime['env'],
+  config: Readonly<Record<string, unknown>>,
+  interpreters: Interpreters
+): string | undefined {
+  if (env === 'light') return interpreters.light
+  if (env === 'audio') return interpreters.audio
+  if (env === 'external') {
+    const python = config.python
+    return typeof python === 'string' && python !== '' ? python : undefined
+  }
+  return undefined
+}
+
+/**
+ * The interpreter that runs the job guard: the shared light one when it is installed, else the plugin's own. The guard
+ * is standard library only, so any Python 3.7 or newer will do, and a plugin that brings its own (GPT-SoVITS) does not
+ * make the person install the light environment just for this. Null when neither exists.
+ */
+export function guardInterpreter(
+  light: string,
+  own: string | undefined,
+  exists: (path: string) => boolean
+): string | null {
+  if (exists(light)) return light
+  if (own !== undefined && exists(own)) return own
+  return null
 }
 
 /** Fire-and-forget HTTP request to a service on loopback. Errors are ignored: the service may die before it answers. */

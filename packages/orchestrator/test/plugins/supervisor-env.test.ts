@@ -543,11 +543,13 @@ describe.runIf(CAN_RUN_GUARD)('the job guard around a real Python service', () =
     const dir = await makeTempDir()
     const entry = pythonService(dir, join(dir, 'py.json'), undefined)
     const supervisor = await makeSupervisor([entry], {
+      interpreters: { light: join(dir, 'no-python.exe') },
       guard: { python: join(dir, 'no-python.exe'), script: join(dir, 'no-guard.py') },
     })
     const state = await supervisor.start('py')
     expect(state.status).toBe('failed')
-    expect(state.lastError).toMatch(/the job guard interpreter does not exist/)
+    expect(state.lastError).toMatch(/the job guard needs a Python interpreter/)
+    expect(state.lastError).toContain('uv sync')
   })
 
   it('fails with a clear message when the guard script is missing', async () => {

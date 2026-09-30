@@ -63,6 +63,14 @@ Placeholders in `command`, `cwd` and `env_vars`: `{port}`, `{python}`, `{plugin_
 Two plugins can offer the same service name (GPT-SoVITS started by Animatus, and GPT-SoVITS that is
 already running); at most one of them may be enabled.
 
+`config_schema.required` lists the settings a plugin cannot start without. A plugin whose required setting is
+missing, empty, and without a `default` in the schema is not started; it stays `failed` with
+`plugins.<id>.config.<key> is not set: <what it is for>`, and `npm run doctor` reports the same before the first start.
+
+The job guard (`guard: true`) is a standard-library Python script. It runs on the shared `light` environment when that
+is installed (`uv sync`), and otherwise on the plugin's own interpreter (`config.python` for `runtime.env: external`),
+so a basic install with GPT-SoVITS does not need `uv`. Python 3.7 or newer will do.
+
 Notes for people who write plugins:
 
 - A service that is `external` and down past its start timeout stays `failed` until it is started again
