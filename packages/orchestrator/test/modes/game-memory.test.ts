@@ -92,6 +92,36 @@ describe('nothing is left running', () => {
   })
 })
 
+describe('the start deadline', () => {
+  it('is the start’s own, not the call’s: an agent that hangs is given up on after start_timeout_sec, not after a slow call', async () => {
+    // one call may take 30 s, but the start has 3
+    const r = await enterMemory({ settings: { start_timeout_sec: 3, request_timeout_sec: 30 } })
+    r.mem!.fault = { kind: 'hang' }
+    const alarms = managerAlarms(r)
+    const entering = r.service.enter('game').catch((e: unknown) => e)
+    await r.tick(3500)
+    expect(await entering).toMatchObject({
+      message: expect.stringMatching(/^the game agent did not answer within 3 s \(/),
+    })
+    expect(alarms.map((a) => a.code)).toEqual(['mode_start_failed'])
+    expect(r.service.state('game')).toBe('IDLE')
+    expect(r.f.tools).toEqual([])
+    await r.tick(60_000) // the call that was in flight ends, and nothing is left
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('an agent that answers late but in time is used: the first calls fail, a later one works', async () => {
+    const r = await enterMemory({ settings: { start_timeout_sec: 10 } })
+    let tries = 0
+    r.mem!.fault = (call) => (call === 'state' && ++tries <= 3 ? { kind: 'unreachable' } : null)
+    const entering = r.service.enter('game')
+    await r.tick(3000)
+    await entering
+    expect(r.service.state('game')).toBe('ACTIVE')
+    expect(tries).toBeGreaterThan(3)
+  })
+})
+
 describe('a resume that does not work', () => {
   it('refused when the mode starts: the start fails with the agent’s words, and the agent is asked to pause again', async () => {
     const r = await enterMemory()

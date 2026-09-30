@@ -260,6 +260,17 @@ describe('a start that cannot happen', () => {
     expectNothingLeft(r)
   })
 
+  it('no plugin provides the game service: the manager says what to enable, and the mode never starts', async () => {
+    const r = await gameRig({ config: { plugins: {} } })
+    const alarms = managerAlarms(r)
+    await expect(r.enter()).rejects.toThrow(
+      'the "game" service is not set up: enable a plugin that provides it'
+    )
+    expect(alarms.map((a) => a.code)).toEqual(['mode_start_failed'])
+    expect(allRequests(r)).toBe(0)
+    expectNothingLeft(r)
+  })
+
   it('a pack that lacks a prompt file stops the start instead of guessing', async () => {
     for (const missing of ['comment', 'restarted', 'steering', 'active']) {
       const r = await gameRig({

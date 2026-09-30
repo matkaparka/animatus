@@ -67,6 +67,28 @@ const MAX_GRACE_MS = 5000
 /** After a comment that failed, the first retry comes after this many seconds and each next one after twice as many. */
 const FAIL_RETRY_SEC = 5
 
+/**
+ * `p`, or null as soon as `signal` aborts. The call behind `p` goes on until its own time limit and nobody waits for it; a
+ * failure of it that comes later is handled here, so it is never an unhandled rejection.
+ */
+function unlessAborted<T>(p: Promise<T>, signal: AbortSignal): Promise<T | null> {
+  return new Promise<T | null>((resolve, reject) => {
+    const gone = () => resolve(null)
+    if (signal.aborted) gone()
+    else signal.addEventListener('abort', gone, { once: true })
+    p.then(
+      (value) => {
+        signal.removeEventListener('abort', gone)
+        resolve(value)
+      },
+      (e: unknown) => {
+        signal.removeEventListener('abort', gone)
+        reject(e)
+      }
+    )
+  })
+}
+
 /** What the mode is, for tests and the panel. */
 export interface GameStatus {
   running: boolean
@@ -169,7 +191,9 @@ export function createGameController(host: ModeHost, deps: GameDeps = {}): GameC
       // a start that was given up on before it began asks nothing
       while (!stop.aborted) {
         try {
-          return await r.client.state()
+          // the deadline is the start's, not the call's: a call that is slower than what is left is not waited for
+          const state = await unlessAborted(r.client.state(), stop)
+          if (state !== null) return state
         } catch (e) {
           // a worker that is not the one the operator named will not become it by waiting
           if (e instanceof WorkerError && e.code === 'wrong_worker')
