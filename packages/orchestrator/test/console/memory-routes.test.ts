@@ -197,7 +197,8 @@ describe('the streamer’s editor over the real memory', () => {
     expect(remove.status).toBe(200)
     file = MemoryFileView.parse(json(await run.call('GET', '/api/memory/file?path=world%2Fa.md')))
     expect(file.lines.map((l) => l.body)).toEqual(['second fact'])
-  })
+    // seven of the streamer's writes, each one a real git commit: slow on Windows, and slower when the whole suite runs
+  }, 60_000)
 
   it('validates a line request: an operation that is not one, a missing field, a bad path', async () => {
     const { run } = await open()
