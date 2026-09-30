@@ -170,6 +170,34 @@ describe('starting and stopping', () => {
     expect(state.pid).toBeUndefined()
   })
 
+  it('fails before anything is spawned when a setting the manifest requires is not set, and says which', async () => {
+    const dir = await makeTempDir()
+    const infoFile = join(dir, 'info.json')
+    const entry = fakeEntry(dir, { args: ['--info-file', infoFile] })
+    entry.manifest.config_schema = {
+      type: 'object',
+      required: ['weights', 'level'],
+      properties: {
+        weights: { type: 'string', description: 'The file that names the weights.' },
+        level: { type: 'integer', default: 3 },
+      },
+    }
+    const supervisor = await makeSupervisor([entry])
+    const state = await supervisor.start('fake')
+    expect(state.status).toBe('failed')
+    expect(state.lastError).toBe(
+      'plugins.fake.config.weights is not set: The file that names the weights'
+    )
+    expect(state.pid).toBeUndefined()
+    await expect(readFile(infoFile, 'utf8')).rejects.toThrow()
+
+    // with the setting given, the same plugin starts
+    const given = await makeSupervisor([entry], {
+      pluginConfig: { fake: { enabled: true, config: { weights: 'w.yaml' } } },
+    })
+    expect((await given.start('fake')).status).toBe('ready')
+  })
+
   it('cancels a start that is still waiting for its first answer when stop is called', async () => {
     const { supervisor, infoFile, id } = await setup({ args: ['--ready-after', '60000'] })
     const pending = supervisor.start(id)

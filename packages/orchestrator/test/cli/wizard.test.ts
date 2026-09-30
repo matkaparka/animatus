@@ -27,6 +27,8 @@ async function world() {
   await mkdir(path.join(root, 'stuff', 'motions'), { recursive: true })
   await mkdir(path.join(root, 'stuff', 'gsv', 'runtime'), { recursive: true })
   await writeFile(path.join(root, 'stuff', 'gsv', 'runtime', 'python.exe'), 'x')
+  await mkdir(path.join(root, 'stuff', 'gsv', 'GPT_SoVITS', 'configs'), { recursive: true })
+  await writeFile(path.join(root, 'stuff', 'gsv', 'GPT_SoVITS', 'configs', 'tts_infer.yaml'), 'x')
   await writeFile(path.join(root, 'stuff', 'ref.wav'), 'x')
   await writeFile(path.join(root, 'stuff', 'chrome.exe'), 'x')
   return { root, p }
@@ -100,6 +102,7 @@ describe('first-run setup', () => {
       'what the recording says',
       p('stuff/gsv'),
       '', // python: the guess
+      '', // inference config: the guess
       '4242', // live room
     ])
     const result = await runSetup({
@@ -135,7 +138,11 @@ describe('first-run setup', () => {
     })
     expect(cfg.plugins.gptsovits).toMatchObject({
       enabled: true,
-      config: { root: p('stuff/gsv'), python: p('stuff/gsv/runtime/python.exe') },
+      config: {
+        root: p('stuff/gsv'),
+        python: p('stuff/gsv/runtime/python.exe'),
+        tts_config: p('stuff/gsv/GPT_SoVITS/configs/tts_infer.yaml'),
+      },
     })
     expect(cfg.tts.styles.neutral).toMatchObject({ ref_text: 'what the recording says' })
     expect(cfg.sources.bilibili).toMatchObject({ enabled: true, room_id: 4242 })
@@ -190,6 +197,32 @@ describe('first-run setup', () => {
     const cfg = parseConfig(YAML.parse(await readFile(result.file as string, 'utf8')), { root })
     expect(cfg.stage.model).toBe('b.vrm')
     expect(cfg.persona).toBe(path.resolve(root, 'personas/mine'))
+  })
+
+  it('the inference config is asked for when the stock one is not there; a relative answer is read from the GPT-SoVITS folder', async () => {
+    const { root, p } = await world()
+    await rm(path.join(root, 'stuff', 'gsv', 'GPT_SoVITS', 'configs', 'tts_infer.yaml'))
+    await writeFile(path.join(root, 'stuff', 'gsv', 'mine.yaml'), 'x')
+    const s = scripted([
+      '', // no model folder
+      '', // no motions
+      '', // persona default
+      '', // no browser
+      2, // provider later
+      0, // voice: start it for me
+      p('stuff/ref.wav'),
+      'words',
+      p('stuff/gsv'),
+      '', // python: the guess
+      p('stuff/gsv/nothing.yaml'), // not there
+      'mine.yaml', // relative to the GPT-SoVITS folder
+      '', // no live room
+    ])
+    const result = await runSetup({ root, prompt: s.prompt, fs: realFs, browserCandidates: [] })
+    expect(s.left()).toBe(0)
+    expect(s.said.join('\n')).toContain('There is no file at')
+    const cfg = parseConfig(YAML.parse(await readFile(result.file as string, 'utf8')), { root })
+    expect(cfg.plugins.gptsovits?.config.tts_config).toBe('mine.yaml')
   })
 
   it('an existing configuration is not overwritten: the new one goes next to it, unless the person says replace', async () => {

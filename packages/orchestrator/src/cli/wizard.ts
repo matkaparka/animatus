@@ -98,7 +98,14 @@ interface Answers {
     key: string
   } | null
   tts:
-    | { kind: 'start'; root: string; python: string; refAudio: string; refText: string }
+    | {
+        kind: 'start'
+        root: string
+        python: string
+        inferConfig: string
+        refAudio: string
+        refText: string
+      }
     | { kind: 'attach'; url: string; refAudio: string; refText: string }
     | null
   bilibiliRoom: number | null
@@ -151,7 +158,11 @@ export function buildConfig(a: Answers): Record<string, unknown> {
         ? {
             gptsovits: {
               enabled: true,
-              config: { root: slash(a.tts.root), python: slash(a.tts.python) },
+              config: {
+                root: slash(a.tts.root),
+                python: slash(a.tts.python),
+                tts_config: slash(a.tts.inferConfig),
+              },
             },
           }
         : { 'gptsovits-attach': { enabled: true, config: { url: a.tts.url } } }
@@ -342,7 +353,18 @@ export async function runSetup(deps: SetupDeps): Promise<SetupResult> {
         async (a) => ((await fs.exists(a)) === 'file' ? null : `There is no file at ${a}`),
         (await fs.exists(guess)) === 'file' ? { default: slash(guess) } : {}
       )
-      answers.tts = { kind: 'start', root: gsvRoot, python, refAudio: ref, refText }
+      // the .yaml that names the GPT and SoVITS weights; a relative answer is read from the GPT-SoVITS folder, as it is when started
+      const inferGuess = path.join(gsvRoot, 'GPT_SoVITS', 'configs', 'tts_infer.yaml')
+      const inferConfig = await askValid(
+        prompt,
+        'Its inference config (the .yaml that names your GPT and SoVITS weights)',
+        async (a) =>
+          (await fs.exists(path.isAbsolute(a) ? a : path.join(gsvRoot, a))) === 'file'
+            ? null
+            : `There is no file at ${a}`,
+        (await fs.exists(inferGuess)) === 'file' ? { default: slash(inferGuess) } : {}
+      )
+      answers.tts = { kind: 'start', root: gsvRoot, python, inferConfig, refAudio: ref, refText }
     } else {
       const url = await askValid(
         prompt,

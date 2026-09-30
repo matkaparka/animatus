@@ -44,6 +44,13 @@ function machine(
 
 const p = (...parts: string[]) => path.resolve(...parts)
 
+/** The settings of a GPT-SoVITS install that is all there. */
+const GSV = {
+  root: 'C:/GPT-SoVITS',
+  python: 'C:/GPT-SoVITS/runtime/python.exe',
+  tts_config: 'C:/GPT-SoVITS/GPT_SoVITS/configs/tts_infer.yaml',
+}
+
 /** A machine on which a first chat works: model, persona, voice, key, builds. */
 function good() {
   const models = 'C:/models'
@@ -54,6 +61,7 @@ function good() {
     p(REPO, 'personas/example/persona.md'),
     p('C:/voice/ref.wav'),
     p('C:/GPT-SoVITS/runtime/python.exe'),
+    p('C:/GPT-SoVITS/GPT_SoVITS/configs/tts_infer.yaml'),
   ]
   const dirList = [p(REPO, 'node_modules'), p(models), p('C:/GPT-SoVITS')]
   return { models, files, dirs: dirList }
@@ -77,7 +85,7 @@ async function config(extra: Record<string, unknown> = {}): Promise<string> {
       plugins: {
         gptsovits: {
           enabled: true,
-          config: { root: 'C:/GPT-SoVITS', python: 'C:/GPT-SoVITS/runtime/python.exe' },
+          config: GSV,
         },
       },
       ...extra,
@@ -104,6 +112,7 @@ describe('the doctor', () => {
       'tts-styles': 'ok',
       'gsv-root': 'ok',
       'gsv-python': 'ok',
+      'gsv-infer': 'ok',
       'port-stage': 'ok',
       'port-console': 'ok',
     })
@@ -287,13 +296,54 @@ describe('the doctor', () => {
     ).toBeUndefined()
   })
 
+  it('GPT-SoVITS without its inference config: the setting is named, and a config file that is not there is too', async () => {
+    const g = good()
+    const { tts_config: _left, ...withoutInfer } = GSV
+    const unset = await runChecks(
+      await config({ plugins: { gptsovits: { enabled: true, config: withoutInfer } } }),
+      machine(g)
+    )
+    expect(by(unset, 'plugin-settings-gptsovits')?.level).toBe('fail')
+    expect(by(unset, 'plugin-settings-gptsovits')?.detail).toContain(
+      'plugins.gptsovits.config.tts_config is not set'
+    )
+    expect(by(unset, 'gsv-infer')).toBeUndefined() // one report per problem, not two
+    expect(summarise(unset).fail).toBeGreaterThan(0)
+
+    const gone = await runChecks(
+      await config(),
+      machine({ ...g, files: g.files.filter((f) => !f.endsWith('tts_infer.yaml')) })
+    )
+    expect(by(gone, 'gsv-infer')?.level).toBe('fail')
+    expect(by(gone, 'gsv-infer')?.fix).toContain('tts_infer.yaml')
+    expect(by(gone, 'plugin-settings-gptsovits')).toBeUndefined()
+  })
+
+  it('a relative inference config is looked for inside the GPT-SoVITS folder', async () => {
+    const g = good()
+    const relative = await config({
+      plugins: {
+        gptsovits: {
+          enabled: true,
+          config: { ...GSV, tts_config: 'GPT_SoVITS/configs/mine.yaml' },
+        },
+      },
+    })
+    expect(by(await runChecks(relative, machine(g)), 'gsv-infer')?.level).toBe('fail')
+    const there = await runChecks(
+      relative,
+      machine({ ...g, files: [...g.files, p('C:/GPT-SoVITS/GPT_SoVITS/configs/mine.yaml')] })
+    )
+    expect(by(there, 'gsv-infer')?.level).toBe('ok')
+  })
+
   it('a plugin that needs the light Python asks for it', async () => {
     const g = good()
     const file = await config({
       plugins: {
         gptsovits: {
           enabled: true,
-          config: { root: 'C:/GPT-SoVITS', python: 'C:/GPT-SoVITS/runtime/python.exe' },
+          config: GSV,
         },
         screencap: { enabled: true },
       },
@@ -329,7 +379,7 @@ describe('the doctor', () => {
         plugins: {
           gptsovits: {
             enabled: true,
-            config: { root: 'C:/GPT-SoVITS', python: 'C:/GPT-SoVITS/runtime/python.exe' },
+            config: GSV,
           },
           screencap: { enabled: true },
         },

@@ -31,6 +31,7 @@ import {
   type PlaceholderContext,
 } from './placeholders.ts'
 import { PortAllocator } from './ports.ts'
+import { describeMissingSettings } from './settings.ts'
 import {
   IS_WINDOWS,
   LineSplitter,
@@ -426,6 +427,8 @@ export class Supervisor extends EventEmitter<SupervisorEvents> {
         this.setStatus(slot, 'ready', 'in-process plugin')
         return
       }
+      const missing = describeMissingSettings(slot.entry.id, slot.entry.manifest, slot.config)
+      if (missing) throw new Error(missing)
       if (runtime.type === 'external') {
         slot.url = this.resolveExternalUrl(slot, runtime.url)
         slot.startedAt = this.now()

@@ -10,6 +10,7 @@ import { ConfigError, loadConfig, secretRefs } from '../config.ts'
 import type { AppConfig } from '../config.ts'
 import { loadModePacks } from '../modes/loader.ts'
 import { PluginRegistry } from '../plugins/registry.ts'
+import { describeMissingSettings } from '../plugins/settings.ts'
 import { builtinControllers } from '../modes/controllers/index.ts'
 
 export type Level = 'ok' | 'warn' | 'fail'
@@ -373,6 +374,21 @@ export async function runChecks(
               'Set plugins.gptsovits.config.python to the python.exe of its environment.'
             )
       )
+      // an unset one is reported by the check of required settings below
+      const infer = String(cfg.tts_config ?? '')
+      if (infer) {
+        const file = path.isAbsolute(infer) ? infer : path.join(root, infer)
+        out.push(
+          (await env.exists(file)) === 'file'
+            ? ok('gsv-infer', 'The GPT-SoVITS inference config is there', infer)
+            : fail(
+                'gsv-infer',
+                'The GPT-SoVITS inference config is missing',
+                infer,
+                'Set plugins.gptsovits.config.tts_config to the .yaml that names your weights (GPT_SoVITS/configs/tts_infer.yaml in a stock install).'
+              )
+        )
+      }
     } else if (entry?.id === 'gptsovits-attach' && opts.online) {
       const url = String(config.plugins['gptsovits-attach']?.config.url ?? '')
       out.push(
@@ -386,6 +402,20 @@ export async function runChecks(
             )
       )
     }
+  }
+
+  // ── every enabled plugin has the settings its manifest requires
+  for (const e of registry.enabled(config.plugins)) {
+    const missing = describeMissingSettings(e.id, e.manifest, config.plugins[e.id]?.config ?? {})
+    if (missing)
+      out.push(
+        fail(
+          `plugin-settings-${e.id}`,
+          `${e.manifest.title} is missing a setting`,
+          missing,
+          `Set it in the configuration, or turn the plugin off (plugins.${e.id}.enabled: false).`
+        )
+      )
   }
 
   // ── python for the plugins that need it

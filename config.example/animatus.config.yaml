@@ -106,6 +106,7 @@ plugins:
     config:
       root: C:/path/to/GPT-SoVITS
       python: C:/path/to/GPT-SoVITS/runtime/python.exe
+      tts_config: C:/path/to/GPT-SoVITS/GPT_SoVITS/configs/tts_infer.yaml   # the .yaml that names your GPT and SoVITS weights (this one is the stock file)
   gptsovits-attach:                # or: use a GPT-SoVITS that is already running
     enabled: false
     config:
