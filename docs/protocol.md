@@ -28,6 +28,7 @@ subprotocol `animatus.stage.v1`). JSON control frames are text frames; media is 
 | Type | Kind | Purpose |
 |---|---|---|
 | `scene.set` | snapshot | Model URL, layout (character offset/scale, drawing frame), background, lighting, camera. The model reloads only when its URL changes. |
+
 | `library.set` | snapshot | Idle base pose, idle variants, talk clips (mirrored variants are derived on the stage). |
 | `look.set` | snapshot | Calm look: light multiplier, mouth scale, calm 0..1, motion scale, lip-sync range, night dim. |
 | `tuning.set` | snapshot | Optional overrides of motion / procedural-layer constants. Unknown keys ignored. |
@@ -40,6 +41,22 @@ subprotocol `animatus.stage.v1`). JSON control frames are text frames; media is 
 | `sleep.play` / `.pause` / `.resume` / `.stop` | command | Long whisper track played from a URL, with a caption timeline. |
 | `debug.request` | command | Dev only (`welcome.dev`). Fixed operations, no code execution. |
 | `ping` | command | Liveness. |
+
+## Camera
+
+`scene.set.camera` is either fixed numbers (`position`, `target`, `follow_head`) or a fit by the model's own
+measured size: `fit: head | upper_body | full_body`. A model made at any scale (the one this stage was built
+against is four metres tall) is then framed the same way: after the model appears in its idle pose the stage
+measures the head joint, the hips and the ankles and puts the camera straight in front, far enough that the
+chosen part and its width fit, re-fitting when the window's shape changes. `fit` other than `none` takes over
+`position`, `target` and `follow_head`. A re-sent `scene.set` keeps the measurement, so the camera does not
+jump when the orchestrator reconnects.
+
+## Lip sync profile
+
+If the orchestrator serves a library named `lipsync`, the stage loads `/asset/lipsync/profile.json` (a wLipSync
+vowel profile) and estimates a/i/u/e/o from the audio it is playing. Without the file, or if the worklet cannot
+start, it falls back to an amplitude-driven single open mouth and reports nothing worse than that.
 
 ## Binary frames
 
@@ -66,6 +83,16 @@ A VRMA stream completes before that utterance's audio starts. An audio stream al
 `playback.ended` carries the reason (`done`, `cancelled`, `error`, `timeout`, `audio_suspended`,
 `superseded`) and the number of buffer underruns. `stats` includes the counters the soak test checks:
 `audio_contexts_created`/`open`, `underruns_total`, `tpose_frames`, `frames_total`.
+
+## Well-known asset paths
+
+The protocol has no message for these; the stage looks for them at fixed URLs and degrades if they are missing.
+
+| Path | What | If missing |
+|---|---|---|
+| `/asset/lipsync/profile.json` | A wLipSync profile (JSON) for vowel estimation | The mouth follows volume only, and the stage reports an `error` with code `lipsync_profile_missing`. |
+
+The orchestrator maps the `lipsync` asset library to a folder that contains `profile.json`.
 
 ## Timing rules the stage follows
 

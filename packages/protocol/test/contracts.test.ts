@@ -103,18 +103,36 @@ secrets:
 
   it('requires a health check, a valid id, and valid secret env names', () => {
     const base = parseYaml(tts)
-    expect(PluginManifest.safeParse({ ...base, health: { start_timeout_ms: 5000 } }).success).toBe(false)
+    expect(PluginManifest.safeParse({ ...base, health: { start_timeout_ms: 5000 } }).success).toBe(
+      false
+    )
     expect(PluginManifest.safeParse({ ...base, id: 'Bad_Id' }).success).toBe(false)
     expect(
       PluginManifest.safeParse({ ...base, secrets: [{ name: 'k', env: 'lower_case' }] }).success
     ).toBe(false)
     expect(PluginManifest.safeParse({ ...base, health: { tcp: true } }).success).toBe(true)
   })
+
+  it('ready_field can be null to skip the body check', () => {
+    const base = parseYaml(tts)
+    const m = PluginManifest.parse({
+      ...base,
+      health: { http: { path: '/docs', ready_field: null } },
+    })
+    expect(m.health.http?.ready_field).toBeNull()
+  })
 })
 
 describe('service health contract', () => {
   it('parses ok and not-ready responses', () => {
-    expect(ServiceHealth.parse({ ok: true, ready: true, service: 'forge', config: { max_long_side: 1024 } })).toBeTruthy()
+    expect(
+      ServiceHealth.parse({
+        ok: true,
+        ready: true,
+        service: 'forge',
+        config: { max_long_side: 1024 },
+      })
+    ).toBeTruthy()
     expect(ServiceHealth.parse({ ok: true, ready: false, service: 'tts' }).ready).toBe(false)
     expect(ServiceHealth.safeParse({ ok: true }).success).toBe(false)
   })
@@ -150,12 +168,18 @@ describe('tool tiers', () => {
     }
   })
   it('approval tools can only be requested by trusted or privileged origins', () => {
-    expect(decideTool('approval', 'untrusted')).toEqual({ action: 'reject', reason: 'untrusted_origin' })
+    expect(decideTool('approval', 'untrusted')).toEqual({
+      action: 'reject',
+      reason: 'untrusted_origin',
+    })
     expect(decideTool('approval', 'trusted')).toEqual({ action: 'queue_approval' })
     expect(decideTool('approval', 'privileged')).toEqual({ action: 'queue_approval' })
   })
   it('disabled and unknown tools never run', () => {
     expect(decideTool('disabled', 'privileged')).toEqual({ action: 'reject', reason: 'disabled' })
-    expect(decideTool(undefined, 'privileged')).toEqual({ action: 'reject', reason: 'unknown_tool' })
+    expect(decideTool(undefined, 'privileged')).toEqual({
+      action: 'reject',
+      reason: 'unknown_tool',
+    })
   })
 })

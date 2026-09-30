@@ -45,7 +45,23 @@ describe('downstream messages', () => {
     expect(r.lighting.intensity).toBe(1)
     expect(r.camera.fov).toBe(20)
     expect(r.camera.follow_head).toBe(true)
+    expect(r.camera.fit).toBe('none')
     expect(r.layout.frame).toBeNull()
+  })
+
+  it('camera fit is a closed set that a partial camera object can omit', () => {
+    const scene = (camera: unknown) =>
+      StageDownstream.safeParse({
+        type: 'scene.set',
+        model: null,
+        layout: { char: { x: 0, y: 0, scale: 1 } },
+        background: { kind: 'none' },
+        camera,
+      })
+    const ok = scene({ fit: 'upper_body' })
+    expect(ok.success && ok.data.type === 'scene.set' && ok.data.camera.fit).toBe('upper_body')
+    expect(scene({ fov: 30 }).success).toBe(true)
+    expect(scene({ fit: 'closeup' }).success).toBe(false)
   })
 
   it('look.set with no fields yields the neutral look', () => {
@@ -107,7 +123,9 @@ describe('downstream messages', () => {
     expect(ok({ type: 'eval', code: '1+1' })).toBe(false)
     expect(ok({ type: 'dance.stop', fade_s: 99 })).toBe(false)
     expect(ok({ type: 'overlay.set', id: 'unknown', visible: true })).toBe(false)
-    expect(ok({ type: 'overlay.set', id: 'credit', visible: true, text: 'x'.repeat(2001) })).toBe(false)
+    expect(ok({ type: 'overlay.set', id: 'credit', visible: true, text: 'x'.repeat(2001) })).toBe(
+      false
+    )
   })
 
   it('parseDownstream returns null instead of throwing', () => {
@@ -121,7 +139,13 @@ describe('upstream is a closed set of reports', () => {
   it('accepts playback reports', () => {
     expect(
       parseUpstream(
-        JSON.stringify({ type: 'playback.started', utterance_id: 'u1', seq: 0, audio_time_s: 1.2, perf_ms: 5 })
+        JSON.stringify({
+          type: 'playback.started',
+          utterance_id: 'u1',
+          seq: 0,
+          audio_time_s: 1.2,
+          perf_ms: 5,
+        })
       )
     ).not.toBeNull()
     expect(
@@ -139,16 +163,30 @@ describe('upstream is a closed set of reports', () => {
   })
 
   it('accepts hello and fills capabilities', () => {
-    const h = parseUpstream(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, stage_id: 'abc' }))
+    const h = parseUpstream(
+      JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, stage_id: 'abc' })
+    )
     expect(h).not.toBeNull()
     expect(h?.type).toBe('hello')
   })
 
   it('rejects every downstream command shape (a stage can never command the orchestrator)', () => {
     const commands = [
-      { type: 'dance.play', dance_id: 'd', name: 'n', title: 't', motion_url: '/asset/x.vrma', music_url: null },
+      {
+        type: 'dance.play',
+        dance_id: 'd',
+        name: 'n',
+        title: 't',
+        motion_url: '/asset/x.vrma',
+        music_url: null,
+      },
       { type: 'utterance.cancel', scope: 'all' },
-      { type: 'scene.set', model: null, layout: { char: { x: 0, y: 0, scale: 1 } }, background: { kind: 'none' } },
+      {
+        type: 'scene.set',
+        model: null,
+        layout: { char: { x: 0, y: 0, scale: 1 } },
+        background: { kind: 'none' },
+      },
       { type: 'sleep.stop' },
       { type: 'debug.request', request_id: 'r', op: 'stats' },
       { type: 'exec', cmd: 'calc' },

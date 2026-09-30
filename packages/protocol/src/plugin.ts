@@ -29,7 +29,9 @@ export const PluginKind = z.enum([
 export type PluginKind = z.infer<typeof PluginKind>
 
 /** Manifest ids and service names: lowercase kebab. */
-export const PluginId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/, 'use lowercase letters, digits and dashes')
+export const PluginId = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,47}$/, 'use lowercase letters, digits and dashes')
 
 /**
  * Where the interpreter comes from.
@@ -59,19 +61,28 @@ const ProcessRuntime = z.object({
   stop: z
     .object({
       /** Polite shutdown request tried before the process tree is killed. */
-      http: z.object({ method: z.enum(['GET', 'POST']).default('POST'), path: z.string() }).optional(),
+      http: z
+        .object({ method: z.enum(['GET', 'POST']).default('POST'), path: z.string() })
+        .optional(),
       grace_ms: z.number().int().min(0).max(60000).default(5000),
     })
     .default({ grace_ms: 5000 }),
 })
 
-/** A service the user starts and stops themselves; the orchestrator only health-checks it. */
-const ExternalRuntime = z.object({ type: z.literal('external'), url: z.url() })
+/**
+ * A service the user starts and stops themselves; the orchestrator only health-checks it. `url` may use
+ * `{config.<key>}` placeholders (checked to be an http(s) URL after they are resolved).
+ */
+const ExternalRuntime = z.object({ type: z.literal('external'), url: z.string().min(1).max(2048) })
 
 /** No process at all: the adapter is the plugin (for example a chat-platform event source). */
 const InprocessRuntime = z.object({ type: z.literal('inprocess') })
 
-export const PluginRuntime = z.discriminatedUnion('type', [ProcessRuntime, ExternalRuntime, InprocessRuntime])
+export const PluginRuntime = z.discriminatedUnion('type', [
+  ProcessRuntime,
+  ExternalRuntime,
+  InprocessRuntime,
+])
 
 export const HealthSpec = z
   .object({
@@ -80,8 +91,12 @@ export const HealthSpec = z
         path: z.string().default('/health'),
         method: z.enum(['GET', 'HEAD']).default('GET'),
         expect_status: z.number().int().min(100).max(599).default(200),
-        /** If set, the JSON body must have this field truthy (ServiceHealth.ready by default). */
-        ready_field: z.string().default('ready'),
+        /**
+         * The JSON body must have this field truthy (`ready` by default, as in ServiceHealth).
+         * `null` skips the body check: only the status code counts. Some third-party servers have no
+         * health endpoint and can only be probed with a page that answers 200 (for example `/docs`).
+         */
+        ready_field: z.string().nullable().default('ready'),
       })
       .optional(),
     tcp: z.boolean().default(false),
@@ -104,6 +119,12 @@ export const ResourceSpec = z.object({
   /** Estimate in MiB. null = never measured; admission uses a conservative fallback and the UI says so. */
   vram_mb_est: z.number().min(0).nullable().default(null),
   ram_mb_est: z.number().min(0).nullable().default(null),
+  /**
+   * Settings (keys of the plugin's config) that change how much VRAM the service needs, such as the
+   * image size limit or the checkpoint. A measurement is only valid for the same values of these keys;
+   * they are hashed into the measurement's `config_hash`.
+   */
+  config_keys: z.array(z.string()).default([]),
   note: z.string().optional(),
 })
 
@@ -131,8 +152,17 @@ export const PluginManifest = z.object({
   provides: z.array(z.string().max(64)).default([]),
   runtime: PluginRuntime,
   health: HealthSpec,
-  restart: RestartSpec.default({ policy: 'on-failure', max_restarts: 3, backoff_ms: [1000, 5000, 15000] }),
-  resources: ResourceSpec.default({ gpu: false, vram_mb_est: null, ram_mb_est: null }),
+  restart: RestartSpec.default({
+    policy: 'on-failure',
+    max_restarts: 3,
+    backoff_ms: [1000, 5000, 15000],
+  }),
+  resources: ResourceSpec.default({
+    gpu: false,
+    vram_mb_est: null,
+    ram_mb_est: null,
+    config_keys: [],
+  }),
   /** Secrets this plugin may receive. It never sees any other. */
   secrets: z.array(SecretRef).default([]),
   /** JSON-Schema-like description of the plugin's own settings, rendered as a form in the console. */
@@ -178,7 +208,15 @@ export type ServiceError = z.infer<typeof ServiceError>
 
 // ─────────────────────────── supervision status ───────────────────────────
 
-export const PluginStatus = z.enum(['disabled', 'stopped', 'starting', 'ready', 'unhealthy', 'stopping', 'failed'])
+export const PluginStatus = z.enum([
+  'disabled',
+  'stopped',
+  'starting',
+  'ready',
+  'unhealthy',
+  'stopping',
+  'failed',
+])
 export type PluginStatus = z.infer<typeof PluginStatus>
 
 // ───────────────────────── adapter interfaces (TS) ─────────────────────────
@@ -208,15 +246,27 @@ export interface TtsRequest {
   /** Voice style key, resolved to a reference audio by the console's emotion map (e.g. neutral, happy, whisper). */
   style: string
   lang?: string
+  /** Speaking-rate multiplier, 0.5 to 2 (1 = the voice's normal rate). */
+  speed?: number
   /** Post-process pitch shift in semitones (used by whisper). */
   pitchSemitones?: number
   signal?: AbortSignal
 }
 
+/** Synthesised speech: PCM16 little-endian mono at `sampleRate`, delivered as it becomes available. */
+export interface TtsStream {
+  sampleRate: number
+  chunks: AsyncIterable<Uint8Array>
+}
+
 export interface TtsAdapter {
-  /** Streams PCM16 chunks as they are synthesised. Throws (never yields silence) on failure. */
-  synthesize(req: TtsRequest): AsyncIterable<Uint8Array> & { sampleRate: number }
-  /** Reference-audio styles this backend can render. */
+  /**
+   * Resolves once the first audio (or at least its format) is known. Rejects on any failure: an adapter
+   * never resolves with silence in place of a failed synthesis. Requests to one backend are serialised by
+   * the adapter when the backend can only do one at a time.
+   */
+  synthesize(req: TtsRequest): Promise<TtsStream>
+  /** Voice styles (reference audios) this backend can render. */
   styles(): Promise<string[]>
 }
 

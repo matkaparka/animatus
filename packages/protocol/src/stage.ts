@@ -40,16 +40,29 @@ export const Background = z.discriminatedUnion('kind', [
 ])
 export type Background = z.infer<typeof Background>
 
+export const CameraFit = z.enum(['none', 'head', 'upper_body', 'full_body'])
+export type CameraFit = z.infer<typeof CameraFit>
+
 export const CameraConfig = z.object({
   fov: z.number().min(5).max(90).default(20),
   position: Vec3.default([0, 1.3, 1.5]),
   target: Vec3.default([0, 1.3, 0]),
   /** After the model loads, move camera height and target to the head bone (keeps x/z of `position`). */
   follow_head: z.boolean().default(true),
+  /**
+   * Frame the model by its measured size instead of fixed numbers, whatever scale it was made at:
+   * head = head and shoulders, upper_body = head down to the hips, full_body = the whole figure.
+   * Anything but `none` takes over `position`, `target` and `follow_head` once the model is up.
+   */
+  fit: CameraFit.default('none'),
 })
 export type CameraConfig = z.infer<typeof CameraConfig>
 
-export const SubtitleLine = z.object({ text: StageText, start: z.number().min(0), end: z.number().min(0) })
+export const SubtitleLine = z.object({
+  text: StageText,
+  start: z.number().min(0),
+  end: z.number().min(0),
+})
 export const LyricLine = z.object({ t: z.number().min(0), text: z.string().max(400) })
 export type LyricLine = z.infer<typeof LyricLine>
 
@@ -75,7 +88,13 @@ export const SceneSet = z.object({
   background: Background,
   /** Multiplier on the base light intensities (directional 1.8, ambient 1.2). */
   lighting: z.object({ intensity: z.number().min(0).max(4).default(1) }).default({ intensity: 1 }),
-  camera: CameraConfig.default({ fov: 20, position: [0, 1.3, 1.5], target: [0, 1.3, 0], follow_head: true }),
+  camera: CameraConfig.default({
+    fov: 20,
+    position: [0, 1.3, 1.5],
+    target: [0, 1.3, 0],
+    follow_head: true,
+    fit: 'none',
+  }),
 })
 
 /** Motion library snapshot. Talk clips get automatic mirrored variants on the stage. */
@@ -221,13 +240,19 @@ export const SleepPlay = z.object({
   /** Timeline of the words being whispered in this track, for the `subtitle` overlay. */
   captions: z.array(SubtitleLine).max(5000).default([]),
 })
-export const SleepPause = z.object({ type: z.literal('sleep.pause'), fade_s: z.number().min(0).max(10).default(1) })
+export const SleepPause = z.object({
+  type: z.literal('sleep.pause'),
+  fade_s: z.number().min(0).max(10).default(1),
+})
 export const SleepResume = z.object({
   type: z.literal('sleep.resume'),
   fade_s: z.number().min(0).max(10).default(1.5),
   volume: z.number().min(0).max(1).default(1),
 })
-export const SleepStop = z.object({ type: z.literal('sleep.stop'), fade_s: z.number().min(0).max(10).default(1) })
+export const SleepStop = z.object({
+  type: z.literal('sleep.stop'),
+  fade_s: z.number().min(0).max(10).default(1),
+})
 
 /** Dev-only diagnostics. Ignored by the stage unless `welcome.dev` is true. */
 export const DebugRequest = z.object({
@@ -395,6 +420,42 @@ export const StageUpstream = z.discriminatedUnion('type', [
   Pong,
 ])
 export type StageUpstream = z.infer<typeof StageUpstream>
+
+// ───────────────────────── per-message types ─────────────────────────
+// Value and type share a name: `DancePlay` is the schema, `DancePlay` the parsed (defaults applied) type.
+
+export type Welcome = z.infer<typeof Welcome>
+export type SceneSet = z.infer<typeof SceneSet>
+export type LibrarySet = z.infer<typeof LibrarySet>
+export type LookSet = z.infer<typeof LookSet>
+export type TuningSet = z.infer<typeof TuningSet>
+export type OverlaySet = z.infer<typeof OverlaySet>
+export type UtteranceBegin = z.infer<typeof UtteranceBegin>
+export type UtteranceCancel = z.infer<typeof UtteranceCancel>
+export type MotionPlay = z.infer<typeof MotionPlay>
+export type DancePlay = z.infer<typeof DancePlay>
+export type DanceStop = z.infer<typeof DanceStop>
+export type DanceTune = z.infer<typeof DanceTune>
+export type SingPlay = z.infer<typeof SingPlay>
+export type SingStop = z.infer<typeof SingStop>
+export type SleepPlay = z.infer<typeof SleepPlay>
+export type SleepPause = z.infer<typeof SleepPause>
+export type SleepResume = z.infer<typeof SleepResume>
+export type SleepStop = z.infer<typeof SleepStop>
+export type DebugRequest = z.infer<typeof DebugRequest>
+export type Ping = z.infer<typeof Ping>
+export type Hello = z.infer<typeof Hello>
+export type ModelState = z.infer<typeof ModelState>
+export type AudioState = z.infer<typeof AudioState>
+export type PlaybackStarted = z.infer<typeof PlaybackStarted>
+export type PlaybackEnded = z.infer<typeof PlaybackEnded>
+export type DanceState = z.infer<typeof DanceState>
+export type SingState = z.infer<typeof SingState>
+export type SleepState = z.infer<typeof SleepState>
+export type Stats = z.infer<typeof Stats>
+export type StageError = z.infer<typeof StageError>
+export type DebugReply = z.infer<typeof DebugReply>
+export type Pong = z.infer<typeof Pong>
 
 // ───────────────────────────────── helpers ─────────────────────────────────
 
