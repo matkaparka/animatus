@@ -46,7 +46,7 @@ modes:
     config:
       blocklist_files: [plugins/forge/blocklist.default.txt, C:/path/to/my-words.txt]   # keep the same in the service settings
       frame:
-        text_overlay: notice        # until the stage draws text on the frame (see "Stage"), then: frame
+        text_overlay: frame         # or: notice (the words go to the banner at the top, the frame carries the picture only)
       routes:
         default:                     # the fallback; the model picks among these checkpoints and LoRAs
           checkpoints:
@@ -203,12 +203,10 @@ will not start, requests are refused with an alarm), never an empty layer.
 The frame is the `frame` overlay: `overlay.set` with `visible`, `image` (`/asset/generated/…`), `text` and, with
 `frame.rect`, `rect`. Every message carries the whole state, because the stage keeps only the latest per overlay.
 
-**The stage draws no `text` on the frame yet, and shows the frame only when it has a picture.** What the draw mode
-needs of the `frame` overlay: a message is its whole state; `visible` without `image` is a frame with only its `text`
-on a dark plate (and the previous picture is dropped); with `image` it is the picture with `text` as a caption under
-it, fading in; `visible: false` hides it. Until the stage does that, set `frame.text_overlay: notice`: the frame overlay
-then carries the picture only (hidden when there is none) and the words go to the banner at the top (the `notice`
-overlay), which the stage does draw.
+The stage treats the `frame` message as its whole state: `visible` without `image` is a frame with only its `text`
+(and the previous picture is dropped); with `image` it is the picture with `text` as a caption under it, fading in
+once it has loaded; `visible: false` hides it. `frame.text_overlay: notice` sends the words to the banner at the top
+instead, and the frame then carries the picture only (hidden when there is none).
 
 The mode's layout (`stage.layout` in the pack) is applied while it is active and taken back when it is left.
 
@@ -281,7 +279,6 @@ refusal of the content is a normal answer that says so. Nothing answers 200 with
 
 - Layer 1 matches English entries as whole words only: `n u d e` gets past it. The forced tags, the forced negatives and the
   rating model are what stand behind it, and the rating model is a classifier that can be wrong.
-- The stage draws no frame text or fade yet (see Stage); the picture appears at once.
 - The panel's last picture is an asset URL of the stage server; the console page is another origin (its content
   security policy allows `'self'` and `data:` images), so it cannot show it until it loads it from the stage's address.
 - A size changed from the panel is applied by the service and remembered, but the mode's admission still hashes the number

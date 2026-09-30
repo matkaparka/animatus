@@ -75,6 +75,65 @@ describe('Overlays', () => {
     )
   })
 
+  describe('the frame is its message', () => {
+    const img = (el: HTMLElement) => el.querySelector('img') as HTMLImageElement
+    const caption = (el: HTMLElement) => el.querySelector('.ov-caption') as HTMLElement
+    const A = '/asset/generated/a.png'
+    const B = '/asset/generated/b.png'
+
+    it('a picture with a caption shows both; the picture fades in only once it has loaded', () => {
+      const { ov, el } = setup()
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: A, text: 'ann' })
+      expect(el('frame').style.display).toBe('')
+      expect(el('frame').dataset.state).toBe('picture')
+      expect(caption(el('frame')).textContent).toBe('ann')
+      expect(img(el('frame')).classList.contains('ov-shown')).toBe(false)
+      img(el('frame')).dispatchEvent(new Event('load'))
+      expect(img(el('frame')).classList.contains('ov-shown')).toBe(true)
+      // the same picture again (a re-send) does not fade it out and in again
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: A, text: 'ann' })
+      expect(img(el('frame')).classList.contains('ov-shown')).toBe(true)
+      // a different one starts hidden again
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: B, text: 'bob' })
+      expect(img(el('frame')).classList.contains('ov-shown')).toBe(false)
+      expect(caption(el('frame')).textContent).toBe('bob')
+    })
+
+    it('only words: a frame with the words and no picture (a request being drawn), and the old picture is gone', () => {
+      const { ov, el } = setup()
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: A, text: 'old' })
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, text: 'drawing' })
+      expect(el('frame').style.display).toBe('')
+      expect(el('frame').dataset.state).toBe('text')
+      expect(img(el('frame')).getAttribute('src')).toBeNull()
+      expect(img(el('frame')).style.display).toBe('none')
+      expect(caption(el('frame')).textContent).toBe('drawing')
+    })
+
+    it('a message says everything: no text, no caption; neither, no frame; not visible, no frame', () => {
+      const { ov, el } = setup()
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: A, text: 'caption' })
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: A })
+      expect(caption(el('frame')).style.display).toBe('none')
+      expect(el('frame').style.display).toBe('')
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true })
+      expect(el('frame').style.display).toBe('none')
+      ov.set({ type: 'overlay.set', id: 'frame', visible: false, text: 'back' })
+      expect(el('frame').style.display).toBe('none')
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, text: 'back' })
+      expect(el('frame').style.display).toBe('')
+    })
+
+    it('the words are text, never markup', () => {
+      const { ov, el } = setup()
+      const evil = '<img src=x onerror="window.pwned=1"><b>bold</b>'
+      ov.set({ type: 'overlay.set', id: 'frame', visible: true, text: evil })
+      expect(caption(el('frame')).textContent).toBe(evil)
+      expect(caption(el('frame')).querySelector('b')).toBeNull()
+      expect(el('frame').querySelectorAll('img')).toHaveLength(1)
+    })
+  })
+
   it('reset clears activity text but keeps the snapshot state', () => {
     const { ov, el } = setup()
     ov.set({ type: 'overlay.set', id: 'lyrics', visible: true })

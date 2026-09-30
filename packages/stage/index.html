@@ -124,10 +124,41 @@
         border-radius: 0.4em;
       }
       .ov-frame {
+        display: flex;
+        flex-direction: column;
         border: 0.4vw solid rgba(255, 255, 255, 0.85);
         border-radius: 0.6vw;
         background: rgba(0, 0, 0, 0.35);
         overflow: hidden;
+      }
+      .ov-frame img {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        object-fit: contain;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+      .ov-frame img.ov-shown {
+        opacity: 1;
+      }
+      .ov-frame .ov-caption {
+        flex: none;
+        padding: 0.4em 0.8em;
+        text-align: center;
+        font-size: max(14px, 1.4vw);
+        background: rgba(0, 0, 0, 0.55);
+      }
+      .ov-frame[data-state='text'] .ov-caption {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: max(18px, 2.2vw);
+        background: none;
+        text-shadow:
+          0 0 4px #000,
+          0 0 10px #000;
       }
     </style>
   </head>

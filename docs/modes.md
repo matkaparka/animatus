@@ -107,6 +107,7 @@ a file by putting the same name in `config/modes/<id>/prompts/`, file by file, w
 | `dance` | dances to music when a viewer asks, holds the voice, says a closing line | dances in the motion library | below |
 | `sleep` | a long whisper track, a calm look, chat answered now and then in a whisper | `paths.asmr`, a `whisper` voice style, a `night` background | [mode-sleep.md](mode-sleep.md) |
 | `commentary` | comments on what a game window shows | the `screencap` plugin, a model that accepts pictures | [mode-commentary.md](mode-commentary.md) |
+| `draw` | draws what a viewer asks for (`画 …`) on your own Forge under an all-ages policy, shows it in a frame, comments | the `forge` plugin and a running Forge, a model that accepts pictures | [mode-draw.md](mode-draw.md) |
 
 ## Dance
 

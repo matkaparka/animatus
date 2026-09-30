@@ -381,7 +381,7 @@ export class App {
       packs: parts.packs,
       registry: this.registry,
       supervisor: this.supervisor,
-      pluginConfig: (id) => this.config.plugins[id]?.config ?? {},
+      pluginConfig: (id) => this.pluginConfigFor(id),
       host: this.makeModeHost(),
       controllers: options.controllers ?? builtinControllers,
       gpu: this.gpu,
@@ -1041,6 +1041,21 @@ export class App {
   private readonly pluginListeners = new Set<(id: string, status: StatusEvent['status']) => void>()
   private readonly modeListeners = new Set<(mode: ModeView) => void>()
   private consoleServer: { openUrl: string; stop(): Promise<void> } | null = null
+
+  /**
+   * A plugin's settings as they are now: the configuration file's, overlaid with what the running service reports for
+   * the keys that decide its memory (a size limit set from the console's panel). Admission reads this, so it follows the
+   * panel and not only the file.
+   */
+  pluginConfigFor(id: string): Record<string, unknown> {
+    const base = this.config.plugins[id]?.config ?? {}
+    const keys = this.registry.get(id)?.manifest.resources.config_keys ?? []
+    const reported = this.supervisor.getStatus(id).health?.config
+    if (!reported || keys.length === 0) return base
+    const merged: Record<string, unknown> = { ...base }
+    for (const key of keys) if (key in reported) merged[key] = reported[key]
+    return merged
+  }
 
   /** The provider ids in the order they are tried right now. */
   llmOrder(): string[] {

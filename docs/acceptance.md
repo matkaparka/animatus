@@ -124,6 +124,20 @@ Not yet done: nothing for P2.
 - A picture sent to the model can carry writing, so `tellBrain` with pictures is untrusted whatever the mode
   says (see P5).
 
+## Draw mode and the Forge service (docs/mode-draw.md)
+
+- **Tested:** 125 Python tests (the service against a fake Forge and a fake rating model, and as a real process) and
+  178 TypeScript tests (the controller through the real mode service, end to end through the real application with a
+  scripted stage page, the client, the planner, and seven tests that run the real Python service as a process through the
+  real supervisor). The tests found and fixed: a request cancelled from the panel left "drawing" on the frame, a late
+  answer after leaving the mode could change the frame, a raid of blocked requests could flood the voice, a start the
+  manager aborts after it finished left the mode switched on, and a prompt whose every tag was blocked still drew a
+  generic picture.
+- **Not verified:** a real Forge (whether it honours the checkpoint override and the unload call), the real rating model
+  on real pictures (a 400 MB download; the tests use a fake), graphics memory (not measured), planning quality with a
+  real model, the frame on a real stage window. The safety layers are a blocklist, forced tags and negatives, and a
+  rating model that is a classifier and can be wrong.
+
 ## P4: memory
 
 Pass criteria: a human edit of one line is in effect in the next sentence; rollback works; recall latency has a

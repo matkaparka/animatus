@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { LlmRequest } from '../../src/llm/types.ts'
 import { danmaku, installCleanup, rig, tempDir, until } from './rig.ts'
 import type { RigOptions } from './rig.ts'
@@ -8,6 +8,7 @@ import type { RigOptions } from './rig.ts'
 installCleanup()
 
 const MODES = path.resolve(__dirname, '../../../../modes')
+const PLUGINS = path.resolve(__dirname, '../../../../plugins')
 const NO_FLAGS = { replace: false, force: false }
 
 const lastText = (req: LlmRequest) => String(req.messages.at(-1)?.content ?? '')
@@ -418,6 +419,31 @@ describe('what a mode can use of the program', () => {
     })
     return { r, songs, host: () => host }
   }
+
+  it('admission reads a plugin’s settings as the running service reports them, for the keys that decide its memory', async () => {
+    const r = await rig({
+      app: { pluginsDir: PLUGINS },
+      config: {
+        plugins: { forge: { enabled: false, config: { max_long_side: 1024, other: 'x' } } },
+      },
+    })
+    // no service running: the file's values
+    expect(r.app.pluginConfigFor('forge')).toEqual({ max_long_side: 1024, other: 'x' })
+    const running = (config: Record<string, unknown>) =>
+      ({
+        status: 'ready',
+        restarts: 0,
+        health: { ok: true, ready: true, service: 'image', config },
+      }) as never
+    const spy = vi.spyOn(r.app.supervisor, 'getStatus')
+    // the size was changed from the console's panel: the service says so, and admission follows
+    spy.mockReturnValue(running({ max_long_side: 1536, other: 'y', unrelated: 1 }))
+    expect(r.app.pluginConfigFor('forge')).toEqual({ max_long_side: 1536, other: 'x' })
+    // a service that reports nothing about it changes nothing
+    spy.mockReturnValue(running({}))
+    expect(r.app.pluginConfigFor('forge')).toEqual({ max_long_side: 1024, other: 'x' })
+    spy.mockRestore()
+  })
 
   it('tells the mode how the model’s answer ended: done with the sentences spoken, failed with why, cancelled when cut off', async () => {
     const { r, host } = await probeRig()

@@ -6,6 +6,10 @@ type Slot = 'utterance' | 'track'
  * The stage's DOM overlays: credit, lyrics, subtitle, picture frame, notice. Everything shown here was
  * sent by the orchestrator (or timed from a timeline it sent). Text is always assigned with
  * `textContent`; nothing that came over the wire is ever parsed as HTML.
+ *
+ * The frame is its message: an `overlay.set` for it says the whole state, and what the message leaves out is gone.
+ * `visible` with a picture shows the picture (fading in once it has loaded) with the text under it as a caption;
+ * `visible` with only text shows a frame with just the words; `visible` with neither, or not `visible`, hides it.
  */
 export class Overlays {
   private els = new Map<OverlayId, HTMLElement>()
@@ -15,6 +19,7 @@ export class Overlays {
   private lyric = ''
   private subtitleBySlot: Record<Slot, string> = { utterance: '', track: '' }
   private frameImg: HTMLImageElement
+  private readonly frameCaption: HTMLElement
   private readonly subtitleName: HTMLElement
   private readonly subtitleWords: HTMLElement
 
@@ -45,10 +50,11 @@ export class Overlays {
     const frame = mk('frame', 'ov-frame')
     this.frameImg = this.doc.createElement('img')
     this.frameImg.alt = ''
-    this.frameImg.style.width = '100%'
-    this.frameImg.style.height = '100%'
-    this.frameImg.style.objectFit = 'contain'
-    frame.appendChild(this.frameImg)
+    // the picture fades in once it is there, not while it loads
+    this.frameImg.addEventListener('load', () => this.frameImg.classList.add('ov-shown'))
+    this.frameCaption = this.doc.createElement('div')
+    this.frameCaption.className = 'ov-caption'
+    frame.append(this.frameImg, this.frameCaption)
   }
 
   /** Apply an `overlay.set` snapshot. */
@@ -65,9 +71,25 @@ export class Overlays {
         el.style.width = `${msg.rect.width}%`
         el.style.height = `${msg.rect.height}%`
       }
-      if (msg.image !== undefined) this.frameImg.src = msg.image
+      this.setFramePicture(msg.image)
+      this.frameText = msg.text ?? ''
     }
     this.render()
+  }
+
+  private frameText = ''
+
+  /** A new picture starts hidden and fades in when it has loaded; no picture removes the old one. */
+  private setFramePicture(image: string | undefined): void {
+    const img = this.frameImg
+    if (image === undefined) {
+      img.removeAttribute('src')
+      img.classList.remove('ov-shown')
+      return
+    }
+    if (img.getAttribute('src') === image) return
+    img.classList.remove('ov-shown')
+    img.src = image
   }
 
   /** Place the picture frame (percent of the viewport); the frame image and visibility come from `set`. */
@@ -144,6 +166,12 @@ export class Overlays {
     )
     this.show('notice', on('notice') ? (this.staticText.get('notice') ?? '') : '')
     const frame = this.els.get('frame') as HTMLElement
-    frame.style.display = on('frame') && this.frameImg.getAttribute('src') ? '' : 'none'
+    const picture = this.frameImg.getAttribute('src') !== null
+    const words = on('frame') ? this.frameText : ''
+    frame.style.display = on('frame') && (picture || words) ? '' : 'none'
+    frame.dataset.state = picture ? 'picture' : 'text'
+    this.frameImg.style.display = picture ? '' : 'none'
+    if (this.frameCaption.textContent !== words) this.frameCaption.textContent = words
+    this.frameCaption.style.display = words ? '' : 'none'
   }
 }

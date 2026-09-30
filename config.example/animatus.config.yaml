@@ -110,10 +110,11 @@ plugins:
     enabled: false
   screencap:                       # copies one window for the commentary mode to look at (Windows only, docs/mode-commentary.md)
     enabled: false
-  forge:
+  forge:                           # the image service the draw mode asks; you start Forge yourself with --api (docs/mode-draw.md)
     enabled: false
     config:
-      max_long_side: 1024          # multiple of 64, at least 512
+      settings_file: C:/path/to/forge-settings.yaml   # start from plugins/forge/settings.example.yaml
+      max_long_side: 1024          # multiple of 64, 512 to 2048; the console panel can change it
   singing:
     enabled: false
 
@@ -130,6 +131,12 @@ modes:
   sleep:                           # a long whisper track, a calm look, rare whispered replies (docs/mode-sleep.md)
     enabled: false                 # needs paths.asmr, a `whisper` entry in tts.styles and the `night` background above
     config: {}                     # volume, fade_in_s, fade_s, shuffle, loop, captions, ... all optional
+  draw:                            # draws what a viewer asks for ("画 …") on your own Forge, all-ages (docs/mode-draw.md)
+    enabled: false                 # needs plugins.forge and a model that accepts pictures; routes.default.checkpoints is the one required setting
+    config:
+      routes:
+        default:
+          checkpoints: [{ name: my-checkpoint, desc: all-round }]
   commentary:                      # comments on what a game window shows (docs/mode-commentary.md)
     enabled: false                 # needs plugins.screencap.enabled and a model that accepts pictures
     config: {}                     # window ("exe:game.exe" or part of a title), interval_sec, language, ... all optional
