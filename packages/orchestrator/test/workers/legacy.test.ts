@@ -126,6 +126,15 @@ describe('an older agent behind the protocol', () => {
     expect(await c.trace()).toEqual([{ tool: 'x' }])
   })
 
+  it('a refusal says what the agent said: the older link keeps its words in `reason`, not `message`', async () => {
+    // Without this the operator, and the model on its next turn, were told "the worker answered 409" for a bot that
+    // had said "game not connected".
+    const l = await legacy()
+    l.s.online = false
+    const e = await failure(client(l.url).command('go north'))
+    expect([e.code, e.status, e.message]).toEqual(['not_online', 409, 'game not connected'])
+  })
+
   it('a restart of the agent (its numbers go backwards) is a new epoch, and a reader is told to start over', async () => {
     const l = await legacy()
     const c = client(l.url)
