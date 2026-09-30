@@ -308,9 +308,11 @@ Pass criterion (brief section 12): on a clean machine, following the documentati
   driven through a Windows pseudo-terminal (ConPTY, from a script that types the answers when each question appears): it
   ran to the end with exit code 0, ordinary answers echoed as typed, and the API key that was typed appeared nowhere in
   the terminal output or in the configuration file, and decrypted back from the store.
+- **A VRM 1 model on the real stage.** The run above used a VRM 0 sample; a VRM 1 model (a sample from the previous
+  setup's model folder) was then put on the stage in a real Chrome window, and its built-in rest pose has the arms down
+  and slightly forward, not lifted.
 - **Not done.** `npm install` with an empty npm cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
-  previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A VRM 1 model on the real
-  stage (the tests use a stand-in; the run used VRM 0). A voice in another language than Chinese with the real
+  previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A voice in another language than Chinese with the real
   GPT-SoVITS: the setting is tested, the sound is not. Another Windows account: the encrypted key store belongs to the
   account that wrote it.
 
