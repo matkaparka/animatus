@@ -651,6 +651,14 @@ describe('leaving the mode takes every alarm of it away', () => {
       ticks: [1500, 8000, 8000],
     },
     { code: 'commentary_window', settings: { window: null }, arrange: () => {}, ticks: [1500] },
+    {
+      code: 'commentary_voice',
+      arrange: (r) => {
+        r.busy.value = true
+        r.f.quiet.answer = false
+      },
+      ticks: [1500, 130_000],
+    },
   ]
 
   it.each(cases)('$code, when the mode is left', async ({ code, settings, arrange, ticks }) => {

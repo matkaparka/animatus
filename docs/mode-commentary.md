@@ -171,6 +171,7 @@ withdrawn when its problem ends or the mode is left.
 | Alarm | Level | Raised when | Goes when |
 |---|---|---|---|
 | `commentary_window` | info | the mode is on and no window is chosen | a window is chosen, or the mode is left |
+| `commentary_voice` | info | the voice was busy every time the loop looked, for two minutes: viewers' replies that never pause, or a reply or speech that is stuck | the voice is free |
 | `commentary_capture` | warn | a capture failed: service not running, window not found, minimised, not responding, service answering nonsense | the next capture works |
 | `commentary_black` | warn | `black_alarm_after` black pictures in a row | the first picture that is not black |
 | `commentary_model` | warn | a model call failed (reading the picture, or asking for the comment) | the next comment works |

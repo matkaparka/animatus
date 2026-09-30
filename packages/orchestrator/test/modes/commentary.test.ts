@@ -212,6 +212,45 @@ describe('waiting for the right moment', () => {
     expect(r.f.told).toHaveLength(1)
   })
 
+  it('tells the operator when the voice has not been free for a long time, and stops when it is', async () => {
+    const r = await commentaryRig()
+    r.busy.value = true
+    r.f.quiet.answer = false // the voice does not become free
+    await r.enter()
+    await r.tick(1500)
+    await r.tick(100_000)
+    expect(r.alarms()).toEqual([]) // not yet: chat is busy now and then
+    await r.tick(30_000)
+    expect(r.alarms()).toEqual(['commentary_voice'])
+    expect(r.f.alarms[0]).toMatchObject({ level: 'info', subject: 'commentary' })
+    expect(r.f.alarms[0]?.message).toBe(
+      "commentary has been waiting 2 min for the voice to be free: viewers' replies keep it busy, or a reply or its speech is stuck"
+    )
+    expect(r.panel()?.status).toBe('waiting for the voice to be free')
+    expect(r.fake.calls).toHaveLength(0)
+
+    r.busy.value = false
+    r.f.quiet.answer = true
+    await r.tick(1000)
+    expect(r.alarms()).toEqual([])
+    expect(r.f.told).toHaveLength(1)
+  })
+
+  it('does not tell the operator about a voice that was busy for a short time and free again, however often', async () => {
+    const r = await commentaryRig({ settings: { analysis_every: 0 } })
+    await r.enter()
+    await r.tick(1500)
+    for (let i = 0; i < 20; i++) {
+      r.busy.value = true // a viewer's reply, and the wait for it ends within the poll
+      r.f.quiet.answer = false
+      await r.tick(50_000)
+      r.busy.value = false
+      r.f.quiet.answer = true
+      await r.tick(10_000)
+    }
+    expect(r.alarms()).toEqual([])
+  })
+
   it('tries again soon when the voice does not become free in time, instead of waiting a whole interval', async () => {
     const r = await commentaryRig()
     r.busy.value = true

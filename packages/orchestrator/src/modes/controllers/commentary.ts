@@ -52,6 +52,8 @@ const FIRST_LOOK_MS = 1500
 const POLL_MS = 1000
 /** The longest a comment is waited for to be spoken before the pause to the next picture starts anyway. */
 const SPEECH_WAIT_MS = 60_000
+/** After waiting this long for the voice, the operator is told: a reply or the speech is stuck, or the chat never pauses. */
+const VOICE_ALARM_MS = 120_000
 
 const NO_WINDOW =
   'commentary is on but no window is chosen: pick one on the mode panel, or set modes.commentary.config.window'
@@ -152,6 +154,8 @@ export function createCommentaryController(
   let nextAt = 0
   /** The wait that follows the pass in progress is the pause between comments (which the operator can change). */
   let intervalWait = false
+  /** Since when the voice has been busy every time the loop looked; null when it was free. */
+  let voiceBusySince: number | null = null
 
   const reader = createReader({
     host,
@@ -216,6 +220,7 @@ export function createCommentaryController(
     r.abort.abort()
     phase = 'off'
     nextAt = 0
+    voiceBusySince = null
     issue.capture = issue.black = issue.model = null
     alarms.clearAll()
   }
@@ -279,10 +284,23 @@ export function createCommentaryController(
     // a viewer's reply, or the last thing said here, goes first
     if (host.busy()) {
       phase = 'voice'
+      voiceBusySince ??= host.now()
       const quiet = await host.whenQuiet(Math.max(intervalMs(), 5_000))
       if (!r.alive()) return 0
-      if (!quiet) return POLL_MS
+      if (!quiet) {
+        const waited = host.now() - voiceBusySince
+        if (waited > VOICE_ALARM_MS)
+          alarms.raise(
+            'commentary_voice',
+            'info',
+            `commentary has been waiting ${Math.floor(waited / 60_000)} min for the voice to be free: ` +
+              "viewers' replies keep it busy, or a reply or its speech is stuck"
+          )
+        return POLL_MS
+      }
     }
+    voiceBusySince = null
+    alarms.clear('commentary_voice')
 
     phase = 'capturing'
     let frame: CapturedFrame
