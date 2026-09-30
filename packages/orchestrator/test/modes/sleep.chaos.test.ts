@@ -1,7 +1,8 @@
 /**
  * Sleep mode under random events. Each seed builds a rig with random settings and then does a few dozen random things
- * (enter, leave, replies that start and end speech, the page going away and coming back, console buttons, the folder
- * changing or failing, the stage misbehaving, time passing), checking after every step what must always be true:
+ * (enter, leave, both at once, entering while the folder is still being read, replies that start and end speech, the
+ * page going away and coming back, console buttons, the folder changing or failing, a stage that reports odd things about
+ * the track, time passing), checking after every step what must always be true:
  *
  *  - the flag, the voice style, the holds and the alarms agree with whether the mode is running;
  *  - nothing is put on top of a whisper (no `sleep.play`, no `sleep.resume` while a reply has the track waiting), and a
@@ -17,8 +18,9 @@ import { file, installSleepRig, rig, sleepBatch, tick } from './sleepRig.ts'
 
 installSleepRig()
 
-const SEEDS = 120
-const STEPS = 60
+/** `SLEEP_CHAOS_SEEDS=5000` looks harder; `SLEEP_CHAOS_SEED=26` runs one seed and prints what the stage was sent. */
+const SEEDS = Number(process.env.SLEEP_CHAOS_SEEDS) || 120
+const STEPS = 80
 const POOL = ['a', 'b', 'c', 'd', 'night/e']
 
 /** mulberry32: any fixed sequence will do, and a seed reproduces a run. */
@@ -31,6 +33,7 @@ const seeded = (seed: number) => () => {
 type Dice = () => number
 const pick = <T>(list: readonly T[], dice: Dice): T => list[Math.floor(dice() * list.length)] as T
 const int = (from: number, to: number, dice: Dice) => from + Math.floor(dice() * (to - from + 1))
+const noop = () => undefined
 
 interface Chaos {
   r: Rig
@@ -39,6 +42,14 @@ interface Chaos {
   /** Something is being said until `endSpeech`. */
   startSpeech(): void
   endSpeech(): void
+  /** Set while the folder is being read and the read waits to be answered. */
+  openFolder?: () => void
+  /** Calls that were made while the folder was being read; they finish when it answers. */
+  pending: Promise<unknown>[]
+  /** Waits for a call that goes through the mode manager, unless the folder is being read: it would wait for that. */
+  settle(call: Promise<unknown>): Promise<void> | undefined
+  /** The folder answers, and what waited for it finishes. */
+  answerFolder(): Promise<void>
   violations: string[]
 }
 
@@ -48,15 +59,44 @@ interface Action {
   run(c: Chaos): Promise<unknown> | unknown
 }
 
+const enter = (c: Chaos) => c.r.service.enter('sleep').then(noop, noop)
+const leave = (c: Chaos) => c.r.service.exit('sleep', 'chaos').then(noop, noop)
 const viaConsole = (c: Chaos, req: Record<string, unknown>) =>
-  c.r.ctl.onConsoleRequest!(req).then(
-    () => undefined,
-    () => undefined
-  )
+  c.settle(c.r.ctl.onConsoleRequest!(req))
 
 const ACTIONS: Action[] = [
-  { name: 'enter', weight: 5, run: (c) => c.r.service.enter('sleep').then(noop, noop) },
-  { name: 'exit', weight: 2, run: (c) => c.r.service.exit('sleep', 'chaos').then(noop, noop) },
+  { name: 'enter', weight: 5, run: (c) => c.settle(enter(c)) },
+  { name: 'exit', weight: 2, run: (c) => c.settle(leave(c)) },
+  {
+    name: 'enter-twice-at-once',
+    weight: 1,
+    run: (c) => c.settle(Promise.all([enter(c), enter(c)])),
+  },
+  {
+    name: 'enter-and-exit-at-once',
+    weight: 2,
+    run: (c) => c.settle(Promise.all([enter(c), leave(c)])),
+  },
+  {
+    name: 'exit-and-enter-at-once',
+    weight: 1,
+    run: (c) => c.settle(Promise.all([leave(c), enter(c)])),
+  },
+  {
+    name: 'folder-is-slow',
+    weight: 2,
+    run: (c) => {
+      if (c.openFolder) return
+      let open!: () => void
+      c.r.library.gate = new Promise<void>((res) => (open = res))
+      c.openFolder = () => {
+        c.r.library.gate = null
+        open()
+      }
+      c.pending.push(enter(c)) // entering while the folder is being read
+    },
+  },
+  { name: 'folder-answers', weight: 3, run: (c) => c.answerFolder() },
   {
     name: 'reply',
     weight: 7,
@@ -87,8 +127,30 @@ const ACTIONS: Action[] = [
         phase: pick(['ended', 'error', 'playing', 'paused', 'off'], c.dice),
       }),
   },
+  {
+    // a stage that says things about the current track that did not happen
+    name: 'odd-report',
+    weight: 3,
+    run: (c) => {
+      const id = c.r.hub.attempted.filter((m) => m.type === 'sleep.play').at(-1)?.track_id
+      c.r.hub.emit('sleep.state', {
+        type: 'sleep.state',
+        ...(id && c.dice() < 0.9 ? { track_id: id } : {}),
+        phase: pick(['loading', 'playing', 'paused', 'ended', 'error', 'off'], c.dice),
+        ...(c.dice() < 0.5 ? { error: 'odd' } : {}),
+      })
+    },
+  },
   { name: 'page-away', weight: 2, run: (c) => c.r.hub.connected && c.r.hub.disconnectStage() },
-  { name: 'page-back', weight: 3, run: (c) => !c.r.hub.connected && c.r.hub.connectStage() },
+  {
+    name: 'page-back',
+    weight: 3,
+    run: (c) => {
+      if (c.r.hub.connected) return
+      if (c.r.ctl.status().replying) REACHED.add('a reply and a page that came back')
+      c.r.hub.connectStage()
+    },
+  },
   { name: 'console-next', weight: 3, run: (c) => viaConsole(c, { action: 'next' }) },
   {
     name: 'console-play',
@@ -99,8 +161,13 @@ const ACTIONS: Action[] = [
   {
     name: 'console-volume',
     weight: 3,
-    run: (c) =>
-      viaConsole(c, { action: 'volume', volume: pick([0, 0.2, 0.5, 1, 1.5, -1, 'x'], c.dice) }),
+    run: (c) => {
+      const st = c.r.ctl.status()
+      const volume = pick([0, 0.2, 0.5, 1, 1.5, -1, 'x'], c.dice)
+      if (st.running && st.stage === 'playing' && !st.replying && typeof volume === 'number')
+        REACHED.add('a volume that changed under a playing track')
+      return viaConsole(c, { action: 'volume', volume })
+    },
   },
   { name: 'console-test-line', weight: 2, run: (c) => viaConsole(c, { action: 'whisper_test' }) },
   { name: 'console-stop', weight: 1, run: (c) => viaConsole(c, { action: 'stop' }) },
@@ -138,9 +205,8 @@ const ACTIONS: Action[] = [
     },
   },
   { name: 'tick-short', weight: 8, run: (c) => tick(int(1, 400, c.dice)) },
-  { name: 'tick-long', weight: 4, run: (c) => tick(int(1_000, 8_000, c.dice)) },
+  { name: 'tick-long', weight: 4, run: (c) => tick(int(1_000, 12_000, c.dice)) },
 ]
-const noop = () => undefined
 const TOTAL = ACTIONS.reduce((n, a) => n + a.weight, 0)
 const choose = (dice: Dice): Action => {
   let at = dice() * TOTAL
@@ -148,11 +214,46 @@ const choose = (dice: Dice): Action => {
   return ACTIONS[0] as Action
 }
 
+/**
+ * What the seeds have got to so far. A random test that quietly stops reaching the interesting states proves nothing, so
+ * the test at the end insists that every one of these was seen at least once.
+ */
+const REACHED = new Set<string>()
+const MUST_REACH = [
+  'running',
+  'entering while the folder is being read',
+  'a reply while the track is playing',
+  'a reply that paused the track',
+  'a reply with no track to pause',
+  'a reply and a page that came back',
+  'a track that ended',
+  'a track that could not be played',
+  'no track could be played',
+  'the playlist ended',
+  'no tracks at all',
+  'a stage that never answers a track',
+  'a reply that was cut off at the longest wait',
+  'a page that was waiting for the stage',
+  'a volume that changed under a playing track',
+  'a shuffled round',
+]
+
 /** What must be true after every step. */
 function check(c: Chaos, where: string): void {
   const { r } = c
   const st = r.ctl.status()
   const ctx = `${where}\n`
+  if (st.running) REACHED.add('running')
+  if (st.running && st.replying && st.stage === 'paused')
+    REACHED.add('a reply that paused the track')
+  if (st.running && st.replying && st.idle !== null) REACHED.add('a reply with no track to pause')
+  if (st.running && st.replying && st.stage === 'playing')
+    REACHED.add('a reply while the track is playing')
+  if (r.service.state('sleep') === 'STARTING')
+    REACHED.add('entering while the folder is being read')
+  if (st.idle === 'failed') REACHED.add('no track could be played')
+  if (st.idle === 'finished') REACHED.add('the playlist ended')
+  if (st.idle === 'empty') REACHED.add('no tracks at all')
   expect(r.flags.sleeping, `${ctx}the flag`).toBe(st.running)
   expect(r.service.state('sleep') === 'ACTIVE', `${ctx}the manager agrees`).toBe(st.running)
   expect(r.styles.at(-1) === 'whisper', `${ctx}the voice style`).toBe(st.running)
@@ -180,6 +281,7 @@ function check(c: Chaos, where: string): void {
 /** The world is healthy again: what must then hold. */
 async function healAndCheck(c: Chaos, where: string): Promise<void> {
   const { r } = c
+  await c.answerFolder()
   c.endSpeech()
   r.speech.answer = true
   r.hub.stage.opts.mode = 'auto'
@@ -216,9 +318,10 @@ async function healAndCheck(c: Chaos, where: string): Promise<void> {
 async function scenario(seed: number): Promise<void> {
   const dice = seeded(seed)
   const loop = dice() < 0.7
+  const shuffle = dice() < 0.4
   const r = await rig({
     settings: {
-      shuffle: dice() < 0.4,
+      shuffle,
       loop,
       fade_s: pick([0, 0.3, 1], dice),
       fade_in_s: pick([0, 1.5], dice),
@@ -238,6 +341,7 @@ async function scenario(seed: number): Promise<void> {
     dice,
     loop,
     violations,
+    pending: [],
     startSpeech() {
       if (r.speech.busy) return
       r.speech.busy = true
@@ -253,6 +357,18 @@ async function scenario(seed: number): Promise<void> {
       release?.()
       release = undefined
     },
+    settle(call) {
+      const done = call.then(noop, noop)
+      if (!c.openFolder) return done
+      c.pending.push(done)
+      return undefined
+    },
+    async answerFolder() {
+      if (!c.openFolder) return
+      c.openFolder()
+      c.openFolder = undefined
+      await Promise.all(c.pending.splice(0))
+    },
   }
   // what the stage was sent and told, to follow a failing seed by eye
   const trace: string[] = []
@@ -262,11 +378,11 @@ async function scenario(seed: number): Promise<void> {
   // nothing may be put on top of a whisper, and a mode that is not running only ever sends its one stop
   const send = r.hub.send.bind(r.hub)
   r.hub.send = (m) => {
-    const file =
+    const track =
       String(m.url ?? '')
         .split('/')
         .at(-1) ?? ''
-    note(`> ${m.type} ${m.track_id ?? ''} ${file}`)
+    note(`> ${m.type} ${m.track_id ?? ''} ${track}`)
     const st = r.ctl.status()
     if ((m.type === 'sleep.play' || m.type === 'sleep.resume') && st.replying)
       violations.push(`${m.type} while a reply has the track waiting`)
@@ -303,6 +419,29 @@ async function scenario(seed: number): Promise<void> {
     expect(r.alarms, end).toEqual([])
     r.hub.stage.reset()
     expect(vi.getTimerCount(), `${end}: timers left`).toBe(0)
+
+    const saw = (label: string, found: boolean) => found && REACHED.add(label)
+    saw(
+      'a track that ended',
+      trace.some((l) => l.includes('< ended sleep-'))
+    )
+    saw(
+      'a track that could not be played',
+      r.events.some((e) => e.includes('cannot read the track'))
+    )
+    saw(
+      'a stage that never answers a track',
+      r.events.some((e) => e.includes('did not start it within'))
+    )
+    saw(
+      'a reply that was cut off at the longest wait',
+      r.logs.some((l) => l.includes('kept the track waiting for'))
+    )
+    saw(
+      'a page that was waiting for the stage',
+      r.events.some((e) => e.includes('waiting for a stage page to connect'))
+    )
+    saw('a shuffled round', shuffle && r.plays().length >= 3)
   } catch (e) {
     const flow = trace.slice(-80).join('\n')
     const log = r.events.slice(-25).join('\n')
@@ -316,8 +455,16 @@ async function scenario(seed: number): Promise<void> {
 const only = Number(process.env.SLEEP_CHAOS_SEED)
 
 describe('sleep mode under random events', () => {
-  it(`keeps its promises for ${SEEDS} seeds of ${STEPS} steps`, { timeout: 120_000 }, async () => {
-    if (only) await scenario(only)
-    else for (let seed = 1; seed <= SEEDS; seed++) await scenario(seed)
-  })
+  it(
+    `keeps its promises for ${SEEDS} seeds of ${STEPS} steps`,
+    { timeout: 60_000 + SEEDS * 200 },
+    async () => {
+      if (only) return void (await scenario(only))
+      for (let seed = 1; seed <= SEEDS; seed++) await scenario(seed)
+      expect(
+        MUST_REACH.filter((s) => !REACHED.has(s)),
+        'states the random steps never got to (the test would prove nothing about them)'
+      ).toEqual([])
+    }
+  )
 })
