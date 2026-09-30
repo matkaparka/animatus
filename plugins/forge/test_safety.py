@@ -56,6 +56,12 @@ class BuildPromptsTest(unittest.TestCase):
         self.assertNotIn("<", built.negative)
         self.assertTrue(built.negative.startswith("(nsfw, explicit"))
 
+    def test_nor_by_weighting_a_tag_at_zero_or_below(self) -> None:
+        built = self.build("1girl", "(nsfw:-1), (explicit:0), (nude: 0.0), (blurry:0.5), (lowres:10), watermark")
+        self.assertTrue(built.negative.endswith("(blurry:0.5), (lowres:10), watermark"))
+        for gone in ("nsfw:-1", "explicit:0)", "nude: 0.0"):
+            self.assertNotIn(gone, built.negative)
+
     def test_a_lora_written_into_the_prompt_is_removed_and_only_the_checked_ones_are_attached(self) -> None:
         built = self.build("1girl, <lora:smuggled:1>", loras=[("sword-lora", 0.7), ("b", 1.0)])
         self.assertNotIn("smuggled", built.prompt)

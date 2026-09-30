@@ -214,6 +214,17 @@ class HealthTest(ServiceCase):
         self.assertIn("boom", body["error"]["message"])
         self.assertEqual((await self.generate(rig))[0], 200)
 
+    async def test_a_rating_model_that_fails_on_a_picture_means_no_picture_never_an_unchecked_one(self) -> None:
+        class Broken:
+            def rate(self, png: bytes) -> dict[str, float]:
+                raise RuntimeError("the picture could not be decoded")
+
+        rig = await self.start(loader=lambda: Broken())
+        status, body = await self.generate(rig)
+        self.assertEqual((status, body["status"], body["reason"]), (500, "error", "internal_error"))
+        self.assertNotIn("image_b64", body)
+        self.assertIn("could not be decoded", body["error"]["message"])
+
     async def test_a_blocklist_that_starts_deleting_a_forced_tag_is_a_loud_500(self) -> None:
         words = self.dir / "words.txt"
         rig = await self.start(blocklist=Blocklist([words], recheck_sec=0))

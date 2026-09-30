@@ -38,6 +38,15 @@ def _tags(text: str) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+#: `(nsfw:-1)`, `(nsfw:0)`, `(nsfw:0.0)`: a weight of zero or below
+_NON_POSITIVE_WEIGHT = re.compile(r":\s*(?:-\s*\d|0*\.?0+\s*\)?\s*$)")
+
+
+def drop_nonpositive_weights(negative: str) -> str:
+    """A tag the caller weights at zero or below would cancel out the forced negatives; it is dropped."""
+    return ", ".join(t for t in _tags(negative) if not _NON_POSITIVE_WEIGHT.search(t))
+
+
 @dataclass(frozen=True)
 class Built:
     prompt: str
@@ -77,7 +86,8 @@ def build_prompts(
     if lost:
         raise ForcedTagLost(f"the blocklist deletes the forced tag(s) {', '.join(lost)}")
 
-    negatives = [t for t in (settings.extra_negative, family.extra_negative, strip_networks(negative)) if t]
+    caller_negative = drop_nonpositive_weights(strip_networks(negative))
+    negatives = [t for t in (settings.extra_negative, family.extra_negative, caller_negative) if t]
     if loras:
         positive += " " + " ".join(f"<lora:{name}:{weight:g}>" for name, weight in loras)
     return Built(positive, ", ".join(negatives), tuple(scrubbed))
