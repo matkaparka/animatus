@@ -60,6 +60,8 @@ export class FakeCapture {
   windowListCalls = 0
   /** While set, listing the windows waits for it (in-process only): a list that is slow to come. */
   windowsGate: Promise<void> | null = null
+  /** While set, listing the windows fails with it (in-process only). */
+  windowsFail: CaptureError | null = null
   /** What the next captures do, one entry each; when it is empty `otherwise` decides. */
   script: Step[] = []
   otherwise: (call: number, req: CaptureRequest) => Step = () => ({ kind: 'frame' })
@@ -121,6 +123,7 @@ export class FakeCapture {
       windows: async () => {
         this.windowListCalls++
         if (this.windowsGate) await this.windowsGate
+        if (this.windowsFail) throw this.windowsFail
         return this.windows.map((w) => ({ ...w }))
       },
       capture: async (req) => {

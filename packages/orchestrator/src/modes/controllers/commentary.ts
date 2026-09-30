@@ -844,7 +844,7 @@ export function createCommentaryController(
 
     panel(): ModePanelInput {
       const serviceUp = host.serviceUrl(cfg.service) !== null
-      if (serviceUp) void refreshWindows(false)
+      void refreshWindows(false) // also when the service is down: it then forgets a list that is out of date
       const now = host.now()
       const shot = (s: Shot | null) => (s ? `${s.text}, ${ago(now - s.at)}` : null)
       const pick = mem.window
@@ -901,7 +901,14 @@ export function createCommentaryController(
         case 'refresh':
           return refreshWindows(true)
         case 'set_interval': {
-          const n = Number(req.interval)
+          // a number, or text that is one: an empty field is not "0 seconds"
+          const typed = typeof req.interval === 'string' ? req.interval.trim() : ''
+          const n =
+            typeof req.interval === 'number'
+              ? req.interval
+              : typed === ''
+                ? Number.NaN
+                : Number(typed)
           if (!Number.isFinite(n))
             return { ok: false, reason: 'the interval has to be a number of seconds' }
           await load()
