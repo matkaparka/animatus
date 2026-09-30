@@ -248,7 +248,7 @@ describe('the dance mode, through the whole program', () => {
     expect(systemText(r.llm.requests[0]!)).not.toContain('motion:dance')
     expect(systemText(r.llm.requests[0]!)).not.toContain('about to dance')
     expect(stage.dances).toEqual([])
-    expect(r.app.modeViews()[0]?.admission?.reasons[0]).toContain(
+    expect(r.app.modeViews().find((m) => m.id === 'dance')?.admission?.reasons[0]).toContain(
       'switched off in the configuration'
     )
     await expect(r.app.modeAction('dance', 'enter', NO_FLAGS)).rejects.toMatchObject({

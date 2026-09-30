@@ -1,0 +1,18 @@
+manifest_version: 1
+id: commentary
+title: Screen commentary
+description: >-
+  The character watches one window (a game, say) and comments on it as it goes, remembering which game it is and
+  what has happened so far. The window itself is not shown on the stage: put it in the picture with your streaming
+  software.
+requires:
+  services: [screencap]
+  vram_mb_est: 0
+exclusive_with: [dance, sing, draw, sleep, game]
+priority: 40
+prompt: prompts/active.md
+triggers:
+  hotkey: ctrl+alt+g
+stage:
+  # the character small in the bottom-right corner, so the window has the room
+  layout: { char: { x: 0, y: 0, scale: 0.45 } }
