@@ -1,332 +1,30 @@
-import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parse as parseYaml } from 'yaml'
-import { ModePanel, StageDownstream } from '@animatus/protocol'
+import { ModePanel } from '@animatus/protocol'
 import { parseConfig } from '../../src/config.ts'
-import type { AppConfigInput } from '../../src/config.ts'
 import { FORMATS } from '../../src/inbox/formats.ts'
 import { defaultInboxConfig } from '../../src/inbox/types.ts'
-import { SleepSettings, createSleepController } from '../../src/modes/controllers/sleep.ts'
-import type { SleepDeps } from '../../src/modes/controllers/sleep.ts'
-import type { TrackFile } from '../../src/modes/controllers/sleepTracks.ts'
-import type { ModeHost } from '../../src/modes/host.ts'
-import { flushJson } from '../../src/modes/jsonfile.ts'
-import { loadModePacks } from '../../src/modes/loader.ts'
-import type { LoadedMode } from '../../src/modes/loader.ts'
-import { ModeService } from '../../src/modes/service.ts'
-import { PluginRegistry } from '../../src/plugins/registry.ts'
-import { MemorySecretStore } from '../../src/plugins/secrets.ts'
-import { assetUrl } from '../../src/stage/assets.ts'
-import { DEFAULT_SLEEP_STAGE, SleepStageModel } from './sleepStageModel.ts'
-import type { SleepPhase, SleepStageOpts } from './sleepStageModel.ts'
+import { SleepSettings } from '../../src/modes/controllers/sleep.ts'
+import {
+  MODES,
+  NEUTRAL,
+  SHORT,
+  WHISPER,
+  enterAndPlay,
+  file,
+  installSleepRig,
+  panel,
+  rig,
+  rowOf,
+  sleepBatch,
+  tempDir,
+  tick,
+  urls,
+} from './sleepRig.ts'
 
-const MODES = path.resolve(__dirname, '../../../../modes')
-
-type Sent = Record<string, unknown> & { type: string }
-type Controller = ReturnType<typeof createSleepController>
-type Phase = SleepPhase
-
-// ─────────────────────────────── the stage page, and the socket to it ───────────────────────────────
-
-interface StageOpts extends SleepStageOpts {
-  /** false: no page is connected, `hub.send` says so. */
-  connected: boolean
-}
-
-class FakeHub extends EventEmitter {
-  delivered: Sent[] = []
-  attempted: Sent[] = []
-  readonly stage: SleepStageModel
-  private up: boolean
-  constructor({ connected, ...opts }: StageOpts) {
-    super()
-    this.up = connected
-    this.stage = new SleepStageModel(opts, (m) => void this.emit('sleep.state', m))
-  }
-  get connected(): boolean {
-    return this.up
-  }
-  /** Like the real hub: an invalid message throws, no stage is `false`. */
-  send(m: Sent): boolean {
-    StageDownstream.parse(m)
-    this.attempted.push(m)
-    if (!this.up) return false
-    this.delivered.push(m)
-    this.stage.handle(m)
-    return true
-  }
-  connectStage(): void {
-    this.up = true
-    this.emit('connected', { sessionId: 'x', hello: {} })
-  }
-  disconnectStage(): void {
-    this.up = false
-    this.stage.reset()
-    this.emit('disconnected', { sessionId: 'x', code: 1006, reason: 'gone', replaced: false })
-  }
-}
-
-// ─────────────────────────────── the rig ───────────────────────────────
-
-const file = (key: string, over: Partial<TrackFile> = {}): TrackFile => {
-  const segs = key.split('/')
-  return {
-    key,
-    title: key,
-    parts: [...segs.slice(0, -1), `${segs.at(-1)}.mp3`],
-    ext: '.mp3',
-    durationS: 600,
-    captions: [{ text: `${key} line`, start: 1, end: 3 }],
-    notes: [],
-    ...over,
-  }
-}
-
-interface RigOpts {
-  tracks?: TrackFile[]
-  settings?: Record<string, unknown>
-  config?: AppConfigInput
-  stage?: Partial<StageOpts>
-  /** `paths.asmr` is not set. */
-  noLibrary?: boolean
-  random?: () => number
-  /** Keep the files of an earlier rig (a restart). */
-  dir?: string
-}
-
-interface Rig {
-  service: ModeService
-  ctl: Controller
-  hub: FakeHub
-  flags: { dancing: boolean; singing: boolean; sleeping: boolean }
-  events: string[]
-  alarms: { code: string; level: string; message: string }[]
-  held: [string, boolean][]
-  styles: (string | null)[]
-  stopped: string[]
-  said: { text: string; style?: string }[]
-  logs: string[]
-  clock: { now: number }
-  dir: string
-  /** What the folder holds, and how reading it goes. */
-  library: {
-    tracks: TrackFile[]
-    skipped: { path: string; reason: string }[]
-    gate: Promise<void> | null
-    fails: string | null
-    hangs: boolean
-    reads: number
-  }
-  /** Speech: `busy` is what `host.busy()` says; `wait` is what `whenQuiet` waits for. */
-  speech: { busy: boolean; wait: Promise<void> | null; answer: boolean }
-  plays(): Sent[]
-  lastPlay(): Sent
-  types(): string[]
-  /** Something reaches the model: the reply is being made and spoken until `finish` is called. */
-  reply(): Promise<{ lines: string[]; finish(): void }>
-  /** What the stage reports about the track it was last sent. */
-  report(phase: Phase, extra?: Record<string, unknown>): void
-}
-
-const dirs: string[] = []
-const rigs: Rig[] = []
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
-})
-afterEach(async () => {
-  for (const r of rigs.splice(0)) await r.service.dispose()
-  vi.useRealTimers()
-  await flushJson()
-  for (const d of dirs.splice(0))
-    await rm(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
-})
-
-const tick = (ms: number) => vi.advanceTimersByTimeAsync(ms)
-
-const WHISPER = { ref_audio: 'C:/ref/whisper.wav', ref_text: 'a whisper' }
-const NEUTRAL = { ref_audio: 'C:/ref/neutral.wav', ref_text: 'normal speech' }
-/** Tracks that end after a second, for the tests that follow a playlist; the others last a minute. */
-const SHORT = { trackMs: 1000 }
-
-/** What the pacer hands over in sleep mode: the newest chat line, marked as a sleep reply. */
-const sleepBatch = () => {
-  const text = `${FORMATS.sleepPrefix}Zed42：goodnight moonbeam`
-  return { text, parts: [{ prio: 4, kind: 'sleep', text, uname: 'Zed42', uid: 7 }] }
-}
-
-async function rig(opts: RigOpts = {}): Promise<Rig> {
-  let dir = opts.dir
-  if (!dir) {
-    dir = await mkdtemp(path.join(tmpdir(), 'animatus-sleep-'))
-    dirs.push(dir)
-  }
-  await mkdir(path.join(dir, 'no-plugins'), { recursive: true })
-  const config = parseConfig(
-    {
-      modes: { sleep: { enabled: true, config: opts.settings ?? {} } },
-      tts: { styles: { neutral: NEUTRAL, whisper: WHISPER }, default_style: 'neutral' },
-      ...opts.config,
-    },
-    { root: dir }
-  )
-  const { modes: packs, errors } = await loadModePacks([MODES])
-  expect(errors).toEqual([])
-  const pack = packs.find((p) => p.manifest.id === 'sleep') as LoadedMode
-
-  const hub = new FakeHub({ ...DEFAULT_SLEEP_STAGE, connected: true, ...opts.stage })
-  const clock = { now: 1_000_000 }
-  const flags = { dancing: false, singing: false, sleeping: false }
-  const events: string[] = []
-  const alarms: Rig['alarms'] = []
-  const held: [string, boolean][] = []
-  const styles: (string | null)[] = []
-  const stopped: string[] = []
-  const said: Rig['said'] = []
-  const logs: string[] = []
-  const speech: Rig['speech'] = { busy: false, wait: null, answer: true }
-  const library: Rig['library'] = {
-    tracks: opts.tracks ?? [file('rain'), file('ocean'), file('waves')],
-    skipped: [],
-    gate: null,
-    fails: null,
-    hangs: false,
-    reads: 0,
-  }
-
-  let service!: ModeService
-  const host: ModeHost = {
-    config,
-    hub: hub as unknown as ModeHost['hub'],
-    motions: null,
-    secrets: new MemorySecretStore(),
-    flags,
-    dataDir: dir,
-    now: () => clock.now,
-    log: (level, msg) => void logs.push(`${level}: ${msg}`),
-    event: (_k, text) => void events.push(text),
-    alarm: (code, level, message) => {
-      const i = alarms.findIndex((a) => a.code === code)
-      if (i >= 0) alarms.splice(i, 1)
-      alarms.push({ code, level, message })
-    },
-    clearAlarm: (code) => {
-      const i = alarms.findIndex((a) => a.code === code)
-      if (i >= 0) alarms.splice(i, 1)
-    },
-    stopSpeech: (reason) => void stopped.push(reason),
-    holdSpeech: (reason, on) => void held.push([reason, on]),
-    setVoiceStyle: (s) => void styles.push(s),
-    say: (o) => void said.push({ text: o.text, ...(o.style ? { style: o.style } : {}) }),
-    whenQuiet: async () => {
-      if (speech.wait) await speech.wait
-      return speech.answer
-    },
-    busy: () => speech.busy,
-    tellBrain: async () => {},
-    brainBusy: () => false,
-    serviceUrl: () => null,
-    modeState: (id) => service.state(id),
-    enterMode: (id, o) => service.tryEnter(id, o),
-    exitMode: async (id, reason) => void (await service.exit(id, reason)),
-    prompt: (mode, name, vars) => service.prompt(mode, name, vars),
-    libraryDir: (l) => (l === 'asmr' && !opts.noLibrary ? 'C:/path/to/asmr' : null),
-    assetUrl: (library, ...parts) => assetUrl(library, ...parts),
-    llmText: async () => '',
-    songLine: () => {},
-  }
-
-  const deps: SleepDeps = {
-    scan: async () => {
-      library.reads++
-      if (library.hangs) return new Promise(() => {})
-      if (library.gate) await library.gate
-      if (library.fails) throw new Error(library.fails)
-      return { tracks: [...library.tracks], skipped: [...library.skipped] }
-    },
-    ...(opts.random ? { random: opts.random } : {}),
-  }
-  let ctl!: Controller
-  service = new ModeService({
-    config,
-    packs: [pack],
-    registry: await PluginRegistry.scan(path.join(dir, 'no-plugins')),
-    supervisor: {
-      start: async () => ({}) as never,
-      stop: async () => ({}) as never,
-      getStatus: () => ({ status: 'stopped' }) as never,
-    },
-    pluginConfig: () => ({}),
-    host,
-    controllers: { sleep: (h) => (ctl = createSleepController(h, deps)) },
-    gpu: { usedMb: () => null, totalMb: () => 12000 },
-    measurements: () => [],
-    resident: [],
-    startTimeoutMs: 60_000,
-    stopTimeoutMs: 60_000,
-    settleTimeoutMs: 10,
-    now: () => clock.now,
-  })
-  service.attach()
-
-  const plays = () => hub.delivered.filter((m) => m.type === 'sleep.play')
-  const r: Rig = {
-    service,
-    ctl,
-    hub,
-    flags,
-    events,
-    alarms,
-    held,
-    styles,
-    stopped,
-    said,
-    logs,
-    clock,
-    dir,
-    library,
-    speech,
-    plays,
-    lastPlay: () => plays().at(-1) as Sent,
-    types: () => hub.delivered.map((m) => m.type),
-    async reply() {
-      speech.busy = true
-      let finish!: () => void
-      speech.wait = new Promise<void>((res) => {
-        finish = () => {
-          speech.busy = false
-          speech.wait = null
-          res()
-        }
-      })
-      const lines = await service.batchExtras(sleepBatch() as never)
-      return { lines, finish }
-    },
-    report(phase, extra = {}) {
-      hub.emit('sleep.state', {
-        type: 'sleep.state',
-        track_id: hub.attempted.filter((m) => m.type === 'sleep.play').at(-1)?.track_id,
-        phase,
-        ...extra,
-      })
-    },
-  }
-  rigs.push(r)
-  await tick(0) // the first look at the folder
-  return r
-}
-
-/** Enter the mode and let the first track start. */
-async function enterAndPlay(r: Rig): Promise<void> {
-  await r.service.enter('sleep')
-  await tick(50)
-}
-
-const panel = (r: Rig) => r.service.viewOf('sleep').panel!
-const rowOf = (r: Rig, key: string) => panel(r).sections[0]!.rows.find((x) => x.id === key)!
-const urls = (r: Rig) => r.plays().map((m) => String(m.url).split('/').at(-1))
+installSleepRig()
 
 // ─────────────────────────────── entering and leaving ───────────────────────────────
 
@@ -548,6 +246,24 @@ describe('the stage page', () => {
     r.hub.connectStage()
     await tick(100)
     expect(r.ctl.status()).toMatchObject({ idle: null, stage: 'playing' })
+    expect(r.alarms).toEqual([])
+  })
+
+  it('a page that comes while a reply is being whispered still gets its chance once the reply is over', async () => {
+    const r = await rig({ stage: { mode: 'error' } })
+    await r.service.enter('sleep')
+    await tick(200)
+    expect(r.ctl.status().idle).toBe('failed')
+    const reply = await r.reply()
+    r.hub.stage.opts.mode = 'auto'
+    r.hub.disconnectStage()
+    r.hub.connectStage()
+    await tick(200)
+    expect(r.ctl.status()).toMatchObject({ replying: true, idle: null })
+    expect(r.plays()).toHaveLength(3) // nothing is put on top of the whisper
+    reply.finish()
+    await tick(3_000)
+    expect(r.ctl.status()).toMatchObject({ replying: false, idle: null, stage: 'playing' })
     expect(r.alarms).toEqual([])
   })
 })
@@ -1322,8 +1038,7 @@ describe('remembering across restarts', () => {
       `{"last_track": "${'x'.repeat(500)}"}`,
       '{"last_track": "a track that was deleted"}',
     ]) {
-      const dir = await mkdtemp(path.join(tmpdir(), 'animatus-sleep-'))
-      dirs.push(dir)
+      const dir = await tempDir()
       await writeFile(path.join(dir, 'sleep-state.json'), content)
       const r = await rig({ dir })
       await enterAndPlay(r)
@@ -1332,8 +1047,7 @@ describe('remembering across restarts', () => {
   })
 
   it('a named track wins over what was remembered; not looping starts at the top; shuffling avoids repeating the last one', async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), 'animatus-sleep-'))
-    dirs.push(dir)
+    const dir = await tempDir()
     await writeFile(path.join(dir, 'sleep-state.json'), '{"last_track":"rain"}')
     const named = await rig({ dir })
     await named.ctl.onConsoleRequest!({ row: 'rain' })

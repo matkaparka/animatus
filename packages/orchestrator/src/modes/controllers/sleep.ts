@@ -595,12 +595,10 @@ export function createSleepController(
     r.phase = null
     r.streak = 0
     r.failed.clear()
-    if (r.cycle) {
-      r.needsPlay = true
-      return
-    }
+    // a page that has not seen the tracks fail gets to try them, also when it comes during a reply
     if (r.idle === 'failed') r.idle = null
-    if (r.idle === null && r.current) play(r, r.current)
+    if (r.cycle) r.needsPlay = true
+    else if (r.idle === null && r.current) play(r, r.current)
     syncAlarms()
   }
 
