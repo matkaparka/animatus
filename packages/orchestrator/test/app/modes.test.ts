@@ -171,8 +171,8 @@ describe('the dance mode, through the whole program', () => {
     const stage = await r.connect({ danceMs: 5000 })
     await until(() => r.app.stage.hub.connected)
     const views = r.app.modeViews()
-    expect(views.map((v) => v.id)).toEqual(['dance'])
-    expect(views[0]).toMatchObject({ state: 'IDLE' })
+    expect(views.map((v) => v.id)).toContain('dance') // every pack in modes/ is listed, switched on or not
+    expect(views.find((v) => v.id === 'dance')).toMatchObject({ state: 'IDLE' })
 
     const started = await r.app.modeAction('dance', 'enter', NO_FLAGS)
     expect(started.id).toBe('dance')

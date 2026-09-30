@@ -1,0 +1,31 @@
+manifest_version: 1
+id: sleep
+title: Sleep
+description: >-
+  A long whispered track plays, the character looks calm, and chat is answered only now and then, in a whisper.
+  It interrupts every other mode while it runs. The tracks are the audio files (and their .json timings) in your
+  asmr library.
+# The whisper voice is the speech service that is always up, and the track is played by the stage's browser:
+# nothing extra runs on the graphics card.
+requires:
+  services: []
+  vram_mb_est: 0
+priority: 100
+preempts: true
+prompt: prompts/active.md
+triggers:
+  hotkey: ctrl+alt+n
+stage:
+  # The calm look. calm 1, motion_scale 1, mouth_scale 0.4 and lip_range were measured in the legacy setup on a real
+  # whisper track: motion_scale 0.4 made the character look frozen, and the analyser's default window saturated 45 %
+  # of the frames of a whisper, hence the wider one. light and dim are a dim night look and were not measured; dim is
+  # also what darkens the stage when there is no picture (a `night` background, see docs/mode-sleep.md).
+  look:
+    calm: 1
+    motion_scale: 1
+    mouth_scale: 0.4
+    lip_range: { min: -2.6, max: -1.0 }
+    light: 0.6
+    dim: 0.4
+  # The name of a preset in stage.presets.backgrounds. Without one the mode still works (an alarm says so).
+  background: night
