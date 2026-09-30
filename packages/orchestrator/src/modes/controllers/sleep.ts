@@ -112,6 +112,8 @@ interface Run {
    * a quick reply can end before the stage's `paused` report arrives.
    */
   paused: boolean
+  /** The volume the stage was last told for the track; the operator may have changed it since. */
+  sentVolume: number
   /** The stage has to be sent the track again (a new page, or none was connected when it was sent). */
   needsPlay: boolean
   /** The track ended or failed while a reply was being whispered: move on afterwards. */
@@ -357,6 +359,7 @@ export function createSleepController(
     r.phase = null
     r.paused = false
     r.needsPlay = false
+    r.sentVolume = volume
     r.playId = `sleep-${++playCounter}`
     let sent: boolean
     try {
@@ -384,6 +387,7 @@ export function createSleepController(
 
   function resume(r: Run): void {
     r.paused = false
+    r.sentVolume = volume
     if (!send({ type: 'sleep.resume', fade_s: cfg.fade_in_s, volume })) {
       r.needsPlay = true
       return
@@ -541,6 +545,18 @@ export function createSleepController(
 
   // ─────────────────────────────── the stage's reports ───────────────────────────────
 
+  /**
+   * The operator's volume, when the track is not playing at it. The stage has no live volume message: a pause and a resume
+   * with a short fade, which starts from silence, is the way to a new level. A track that is loading or waiting for a reply
+   * gets it when it plays or comes back.
+   */
+  function applyVolume(r: Run): void {
+    if (r.phase !== 'playing' || r.cycle !== null || r.sentVolume === volume) return
+    if (!send({ type: 'sleep.pause', fade_s: 0 })) return
+    send({ type: 'sleep.resume', fade_s: VOLUME_FADE_S, volume })
+    r.sentVolume = volume
+  }
+
   function onPlaying(r: Run): void {
     clearWatchdog(r)
     r.streak = 0
@@ -548,6 +564,7 @@ export function createSleepController(
     if (r.current) remember(r.current)
     // a pause that reached the stage while it was still loading did nothing: say it again
     if (r.cycle) r.paused = send({ type: 'sleep.pause', fade_s: cfg.fade_s })
+    else applyVolume(r)
     syncAlarms()
   }
 
@@ -628,6 +645,7 @@ export function createSleepController(
       lastError: null,
       cycle: null,
       paused: false,
+      sentVolume: volume,
       needsPlay: false,
       needsAdvance: false,
       jump: null,
@@ -675,12 +693,7 @@ export function createSleepController(
 
   const setVolume = (v: number) => {
     volume = v
-    const r = run
-    if (r && r.phase === 'playing' && r.cycle === null) {
-      // The stage has no live volume message: pausing and resuming with a short fade is the way to a new level.
-      if (send({ type: 'sleep.pause', fade_s: 0 }))
-        send({ type: 'sleep.resume', fade_s: VOLUME_FADE_S, volume })
-    }
+    if (run) applyVolume(run)
   }
 
   const testLine = () => host.prompt('sleep', 'whisper_test') ?? FALLBACK_TEST_LINE

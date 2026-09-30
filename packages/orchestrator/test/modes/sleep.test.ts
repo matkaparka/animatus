@@ -1025,6 +1025,24 @@ describe('the console', () => {
     expect(r.hub.delivered.at(-1)).toMatchObject({ type: 'sleep.resume', volume: 0.2 })
   })
 
+  it('a volume set while the track is still loading is applied as soon as it plays, once', async () => {
+    const r = await rig({ stage: { loadMs: 500 } })
+    await r.service.enter('sleep')
+    await tick(100)
+    expect(r.ctl.status().stage).toBe('loading')
+    await r.ctl.onConsoleRequest!({ action: 'volume', volume: 0.3 })
+    expect(r.types()).toEqual(['sleep.play']) // nothing to fade yet
+    await tick(600)
+    expect(r.hub.delivered.slice(-2)).toMatchObject([
+      { type: 'sleep.pause', fade_s: 0 },
+      { type: 'sleep.resume', fade_s: 0.5, volume: 0.3 },
+    ])
+    await tick(3_000)
+    expect(r.types().filter((t) => t === 'sleep.pause')).toHaveLength(1) // not again and again
+    expect(r.ctl.status()).toMatchObject({ stage: 'playing', volume: 0.3 })
+    expect(r.hub.stage.phase).toBe('playing')
+  })
+
   it('a test line is whispered in the whisper voice through the same pause and resume, and only one at a time', async () => {
     const r = await rig()
     await enterAndPlay(r)

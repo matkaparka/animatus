@@ -39,7 +39,10 @@ describe('the status line', () => {
   it('says what the mode is doing, in the order of what matters most', () => {
     expect(status({ running: false })).toBe('not running; 2 track(s) ready')
     expect(status({ running: false, tracks: [] })).toBe('not running; no tracks found yet')
-    expect(status({ replying: true, idle: 'failed' })).toContain('whispering')
+    expect(status({ replying: true })).toBe('whispering; the track comes back afterwards')
+    expect(status({ replying: true, idle: 'failed' })).toBe(
+      'whispering; there is no track to bring back'
+    )
     expect(status({ idle: 'empty' })).toBe('no tracks: only whispered replies')
     expect(status({ idle: 'failed' })).toContain('no track could be played')
     expect(status({ idle: 'finished' })).toBe('the playlist has ended: only whispered replies')

@@ -58,7 +58,10 @@ function statusLine(s: PanelState): string {
     return s.tracks.length > 0
       ? `not running; ${s.tracks.length} track(s) ready`
       : 'not running; no tracks found yet'
-  if (s.replying) return 'whispering; the track comes back afterwards'
+  if (s.replying)
+    return s.idle === null
+      ? 'whispering; the track comes back afterwards'
+      : 'whispering; there is no track to bring back'
   if (s.idle === 'empty') return 'no tracks: only whispered replies'
   if (s.idle === 'failed')
     return 'no track could be played (see the alarm): press Play on a track to try again'
