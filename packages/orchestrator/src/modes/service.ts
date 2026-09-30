@@ -386,7 +386,14 @@ export class ModeService extends EventEmitter<Events> {
     const out: ModePrompt[] = []
     for (const id of this.manager.active()) {
       const text = this.packs.get(id)?.activePrompt
-      if (text) out.push({ id, text })
+      if (!text) continue
+      let vars: Record<string, string> = {}
+      try {
+        vars = this.controllers.get(id)?.promptVars?.() ?? {}
+      } catch (e) {
+        this.log('warn', `modes: ${id} could not give its prompt values: ${(e as Error).message}`)
+      }
+      out.push({ id, text: renderTemplate(text, vars) })
     }
     for (const [id, c] of this.controllers) {
       if (this.manager.active().includes(id)) continue

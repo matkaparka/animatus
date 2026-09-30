@@ -424,6 +424,37 @@ describe('prompts and hooks', () => {
     expect(r.service.prompts().map((p) => p.id)).toEqual(['sleep'])
   })
 
+  it('the active prompt of a running mode is filled in with what its controller says right now', async () => {
+    let game = 'Chess'
+    const r = await rig({
+      modes: [
+        {
+          pack: pack('watch', {}, {}, 'You are watching {{game}} ({{unknown}}).'),
+          controller: { promptVars: () => ({ game }) },
+        },
+        {
+          pack: pack('broken', {}, {}, 'Broken {{x}}.'),
+          controller: {
+            promptVars: () => {
+              throw new Error('nope')
+            },
+          },
+        },
+      ],
+    })
+    await r.service.enter('watch')
+    expect(r.service.prompts()).toEqual([
+      { id: 'watch', text: 'You are watching Chess ({{unknown}}).' },
+    ])
+    game = 'Go'
+    expect(r.service.prompts()[0]!.text).toContain('watching Go')
+    await r.service.enter('broken', { force: true })
+    expect(r.service.prompts().map((p) => p.text)).toEqual([
+      'You are watching Go ({{unknown}}).',
+      'Broken {{x}}.',
+    ])
+  })
+
   it('an advertisement that names a missing prompt file or throws is left out, not fatal', async () => {
     const r = await rig({
       modes: [

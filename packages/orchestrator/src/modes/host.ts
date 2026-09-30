@@ -147,6 +147,12 @@ export interface ModeControllerHooks {
   /** The operator asked for the mode from the console, with optional details. */
   onConsoleRequest?(request: Record<string, unknown>): Promise<{ ok: boolean; reason?: string }>
   /**
+   * Values for the `{{name}}` placeholders of the pack's active prompt (`prompt:` in the manifest), asked before every
+   * reply while the mode is active: the game being played, the summary so far. Missing names are left as written.
+   * Must be quick and must not throw.
+   */
+  promptVars?(): Record<string, string>
+  /**
    * What the console shows for this mode besides its state: facts, buttons, lists (see `ModePanel`). Called every
    * time the console asks for the modes, so it must be quick and must not throw; whatever the operator presses comes
    * back through `onConsoleRequest` with `action` (and `row`) set to the ids given here.
