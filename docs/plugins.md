@@ -115,6 +115,8 @@ yield silence.
 ## Environments
 
 Python services run from one of two uv dependency groups (`pyproject.toml`): `light` (no torch) and
-`audio` (torch, CUDA 12.8). The groups conflict on purpose and never share an environment. Speech
+`audio` (torch, CUDA 12.8). Install [uv](https://docs.astral.sh/uv/) and run `uv sync` in the repository folder to create
+the light one (`.venv`), which the plugins that say `env: light` (image generation, screen capture, the game demo)
+need. Chat with GPT-SoVITS does not need it. The groups conflict on purpose and never share an environment. Speech
 synthesis (GPT-SoVITS), Forge Neo, Applio and the game MCP servers keep their own environments and are
 referenced by path from the configuration (`runtime.env: external`).
