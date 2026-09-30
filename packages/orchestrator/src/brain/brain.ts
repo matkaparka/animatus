@@ -54,6 +54,8 @@ export interface BrainInput {
   name?: string
   /** One-off prompt blocks for this reply only (for example a note about a gift). */
   extras?: readonly string[]
+  /** Pictures the model should look at for this reply (a screenshot, a drawing). They are not kept in the record. */
+  images?: readonly { mime: string; base64: string }[]
   /** Cancel the reply being generated (and its speech) before starting this one. */
   preempt?: boolean
 }
@@ -199,7 +201,18 @@ export class Brain extends EventEmitter<BrainEvents> {
       // The placeholder carries the exchanges before this message; the message itself follows separately.
       historyText: o.chat.historyText(n - 1, 1),
     })
-    const history = historyInlined ? o.chat.toMessages(1) : o.chat.toMessages(n)
+    const history: ChatMessage[] = historyInlined ? o.chat.toMessages(1) : o.chat.toMessages(n)
+    const last = history.at(-1)
+    if (input.images && input.images.length > 0 && last?.role === 'user') {
+      // the pictures go with the message just written (the last one), as parts; the record keeps only its text
+      history[history.length - 1] = {
+        role: 'user',
+        content: [
+          { type: 'text', text: typeof last.content === 'string' ? last.content : '' },
+          ...input.images.map((i) => ({ type: 'image' as const, mime: i.mime, base64: i.base64 })),
+        ],
+      }
+    }
     return [{ role: 'system', content: text }, ...history]
   }
 

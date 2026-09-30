@@ -32,6 +32,7 @@ import type { AppConfig, LlmProviderEntry } from '../config.ts'
 import { Blocklist, Pacer, Router, emptyBlocklist } from '../inbox/index.ts'
 import type { BlockChecker, PacerState } from '../inbox/index.ts'
 import { LlmError, LlmGateway, createLlmProvider } from '../llm/index.ts'
+import type { ChatMessage } from '../llm/types.ts'
 import type { LlmGatewayStats } from '../llm/index.ts'
 import { MotionLibrary } from '../library/motionLibrary.ts'
 import { PluginRegistry } from '../plugins/registry.ts'
@@ -50,6 +51,7 @@ import { BilibiliSource } from '../sources/bilibili/index.ts'
 import type { BilibiliSourceEvent, BilibiliSourceOptions } from '../sources/bilibili/index.ts'
 import { parseCookieHeader } from '../sources/bilibili/cookies.ts'
 import { SpeechDirector } from '../speech/director.ts'
+import { assetUrl } from '../stage/assets.ts'
 import { launchStageWindow } from '../stage/launcher.ts'
 import { createConsoleLogger } from '../stage/logger.ts'
 import type { Logger } from '../stage/logger.ts'
@@ -65,11 +67,13 @@ import { AlarmBoard, RunLog, TraceBoard } from './board.ts'
 import { AppError } from './errors.ts'
 import { builtinControllers } from '../modes/controllers/index.ts'
 import { GpuMeter } from '../modes/gpu.ts'
-import type { ActivityFlags, ModeHost } from '../modes/host.ts'
+import type { ActivityFlags, LlmTextRequest, ModeHost } from '../modes/host.ts'
 import { loadModePacks } from '../modes/loader.ts'
 import type { LoadedMode } from '../modes/loader.ts'
 import { loadMeasurements } from '../modes/measurements.ts'
 import { ModeService } from '../modes/service.ts'
+import { composeStage, resolveModeStage } from '../modes/stageProfile.ts'
+import type { ComposedStage, ModeStage } from '../modes/stageProfile.ts'
 
 /** Names the console's key page and `${secret:x}` references know, and the variables they are read from. */
 export const WELL_KNOWN_SECRETS: Readonly<Record<string, string>> = {
@@ -107,6 +111,8 @@ export interface AppOptions {
   inboxTickMs?: number
   /** Folders holding mode packs, later ones overriding earlier ones. Default: modes/ and config/modes/ under the project root. */
   modesDirs?: string[]
+  /** Mode controllers by mode id; default the ones that ship with the program. For tests and embedding. */
+  controllers?: Readonly<Record<string, import('../modes/host.ts').ControllerFactory>>
   /** Where the plugin folders are. Default: plugins under the project root. */
   pluginsDir?: string
   /** `welcome.dev` for the stage. */
@@ -139,6 +145,7 @@ export class App {
   readonly flags: ActivityFlags = { dancing: false, singing: false, sleeping: false }
   readonly gpu = new GpuMeter()
   readonly modes: ModeService
+  private libraryDirs: Readonly<Record<string, string>> = {}
   private measurements: VramMeasurement[] = []
   private measurementTimer: NodeJS.Timeout | null = null
   readonly startedAt: number
@@ -202,6 +209,9 @@ export class App {
     if (config.paths.songs) libraries.songs = config.paths.songs
     if (config.paths.asmr) libraries.asmr = config.paths.asmr
     if (config.paths.lipsync) libraries.lipsync = config.paths.lipsync
+    // what the program makes for the stage to show (pictures a mode drew): always there, under data/
+    libraries.generated = path.join(config.paths.data_dir, 'generated')
+    this.libraryDirs = libraries
     this.stage = createStageServer({
       port: config.servers.stage_port,
       staticDir: options.stageDir ?? path.join(config.root, 'packages', 'stage', 'dist'),
@@ -257,10 +267,16 @@ export class App {
       onDrop: (reason, info) =>
         this.logger('debug', `inbox: dropped (${reason})`, { ...info, text: undefined }),
       onSongCommand: (cmd) =>
-        this.runLog.add(
-          'inbox',
-          `song command "${cmd.kind}" ignored: the singing mode is not set up`
-        ),
+        void this.modes
+          .songCommand(cmd)
+          .then((taken) => {
+            if (!taken)
+              this.runLog.add(
+                'inbox',
+                `song command "${cmd.kind}" ignored: the singing mode is not set up`
+              )
+          })
+          .catch((e) => this.logger('error', `modes: song command: ${firstLine(e)}`)),
     })
     this.pacer = new Pacer(this.router, config.inbox)
 
@@ -292,7 +308,7 @@ export class App {
       supervisor: this.supervisor,
       pluginConfig: (id) => this.config.plugins[id]?.config ?? {},
       host: this.makeModeHost(),
-      controllers: builtinControllers,
+      controllers: options.controllers ?? builtinControllers,
       gpu: this.gpu,
       measurements: () => this.measurements,
       resident: config.vram.resident,
@@ -522,6 +538,7 @@ export class App {
     const onModeChange = (id: string) => {
       const view = this.modes.viewOf(id)
       this.runLog.add('mode', `${id}: ${view.state}`)
+      this.refreshModeStage()
       for (const fn of this.modeListeners) fn(view)
     }
     this.modes.on('change', onModeChange)
@@ -896,6 +913,7 @@ export class App {
           source: 'system',
           trust: 'privileged',
           ...(opts?.extras ? { extras: opts.extras } : {}),
+          ...(opts?.images ? { images: opts.images } : {}),
           ...(opts?.preempt ? { preempt: true } : {}),
         })
       },
@@ -905,7 +923,31 @@ export class App {
       enterMode: (id, opts) => app.modes.tryEnter(id, opts),
       exitMode: async (id, reason) => void (await app.modes.exit(id, reason)),
       prompt: (modeId, name, vars) => app.modes.prompt(modeId, name, vars),
+      libraryDir: (library) => app.libraryDirs[library] ?? null,
+      assetUrl: (library, ...parts) => assetUrl(library, ...parts),
+      llmText: (req) => app.llmText(req),
+      songLine: (text) => this.router.addSongLine(text),
     }
+  }
+
+  /** One question to the model, answered as text (see `ModeHost.llmText`). */
+  private async llmText(req: LlmTextRequest): Promise<string> {
+    const messages: ChatMessage[] = [
+      ...(req.system ? [{ role: 'system' as const, content: req.system }] : []),
+      { role: 'user', content: req.user },
+    ]
+    let out = ''
+    for await (const d of this.currentLlm().stream({
+      messages,
+      tag: req.tag,
+      ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+      ...(req.maxOutputTokens !== undefined ? { maxOutputTokens: req.maxOutputTokens } : {}),
+      ...(req.timeoutMs !== undefined ? { timeoutMs: req.timeoutMs } : {}),
+      ...(req.signal ? { signal: req.signal } : {}),
+    })) {
+      if (d.type === 'text') out += d.text
+    }
+    return out
   }
 
   /** Re-read the probe's measurements (a new one takes effect within half a minute, without a restart). */
@@ -1016,14 +1058,61 @@ export class App {
           name: s.model.slice(0, 80),
         }
       : null
+    const shown = this.composed
     return {
       type: 'scene.set' as const,
       model,
-      layout: { char: s.layout.char, frame: s.layout.frame },
-      background: s.background,
+      layout: shown ? shown.layout : { char: s.layout.char, frame: s.layout.frame },
+      background: shown ? shown.background : s.background,
       lighting: s.lighting,
       camera: { ...s.camera, adjust: this.cameraAdjust ?? s.camera.adjust },
     }
+  }
+
+  // ───────────────────────────── what the active modes do to the stage ─────────────────────────────
+
+  /** The stage as the active modes want it; null while none wants anything, then the configuration applies. */
+  private composed: ComposedStage | null = null
+
+  /**
+   * Put together the stage for the configuration plus the modes that are active now (layout, background, look),
+   * and send it if it differs from what the stage has. Called whenever a mode changes state.
+   */
+  private refreshModeStage(): void {
+    const s = this.config.stage
+    const active = this.modes
+      .active()
+      .filter((id) => this.modes.state(id) === 'ACTIVE')
+      .map((id) => this.modes.manifest(id))
+      .filter((m) => m !== undefined)
+      .sort((a, b) => a.priority - b.priority)
+    const stack: ModeStage[] = []
+    const seen = new Set<string>()
+    for (const m of active) {
+      seen.add(m.id)
+      const { stage, problems } = resolveModeStage(m, s.presets)
+      if (problems.length > 0)
+        this.alarms.raise(
+          'mode_stage_preset',
+          'warn',
+          `mode "${m.id}": ${problems.join('; ')}`,
+          m.id
+        )
+      else this.alarms.clear('mode_stage_preset', m.id)
+      stack.push(stage)
+    }
+    for (const id of this.modes.ids()) if (!seen.has(id)) this.alarms.clear('mode_stage_preset', id)
+    const next =
+      stack.length === 0
+        ? null
+        : composeStage(
+            { layout: { char: s.layout.char, frame: s.layout.frame }, background: s.background },
+            stack
+          )
+    if (JSON.stringify(next) === JSON.stringify(this.composed)) return
+    this.composed = next
+    this.stage.hub.setScene(this.sceneMessage())
+    this.stage.hub.setLook({ type: 'look.set', ...(next?.look ?? {}) })
   }
 
   // ───────────────────────────── the operator's mouse on the stage ─────────────────────────────
@@ -1097,6 +1186,9 @@ export class App {
     if (this.started) return
     this.started = true
     this.logger('info', `animatus starting (stage :${this.config.servers.stage_port})`)
+    await mkdir(this.libraryDirs.generated as string, { recursive: true }).catch((e) =>
+      this.logger('warn', `data/generated could not be made: ${firstLine(e)}`)
+    )
     await this.stage.start()
     const hub = this.stage.hub
     await this.loadStageState()

@@ -17,7 +17,10 @@ import {
   CameraConfig,
   CharLayout,
   Id,
+  LayoutOverride,
+  LookOverride,
   PluginId,
+  PresetName,
   Rect,
   SubtitleVariant,
 } from '@animatus/protocol'
@@ -142,6 +145,18 @@ const Stage = z.strictObject({
     .strictObject({
       char: CharLayout.prefault({ x: 0, y: 0, scale: 1 }),
       frame: Rect.nullable().default(null),
+    })
+    .prefault({}),
+  /**
+   * Named looks of the stage that a mode pack can ask for by name (`stage: { look: sleep }` in its manifest):
+   * where the character stands, what is behind, how calm it is. A mode pack that carries the values itself
+   * does not need these.
+   */
+  presets: z
+    .strictObject({
+      layouts: z.record(PresetName, LayoutOverride).default({}),
+      backgrounds: z.record(PresetName, Background).default({}),
+      looks: z.record(PresetName, LookOverride).default({}),
     })
     .prefault({}),
   /** When set, the orchestrator opens the stage in a capture window itself. */

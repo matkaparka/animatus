@@ -8,7 +8,8 @@
  */
 import type { ClipRef, Emotion, RunEvent } from '@animatus/protocol'
 import type { AppConfig } from '../config.ts'
-import type { Batch } from '../inbox/types.ts'
+import type { Batch, SongCommand } from '../inbox/types.ts'
+import type { ChatPart } from '../llm/types.ts'
 import type { StageHub } from '../stage/hub.ts'
 import type { MotionLibrary } from '../library/motionLibrary.ts'
 import type { SecretStore } from '../plugins/secrets.ts'
@@ -67,7 +68,15 @@ export interface ModeHost {
    * A privileged system message ("you just finished a dance"): it goes through the same brain as a chat reply
    * (persona, history, tags, speech). Resolves when the model's answer is written, not when it is spoken.
    */
-  tellBrain(text: string, opts?: { extras?: string[]; preempt?: boolean }): Promise<void>
+  tellBrain(
+    text: string,
+    opts?: {
+      extras?: string[]
+      preempt?: boolean
+      /** Pictures the model should see with this message. */
+      images?: { mime: string; base64: string }[]
+    }
+  ): Promise<void>
   /** True while the brain is writing a reply. */
   brainBusy(): boolean
 
@@ -85,6 +94,35 @@ export interface ModeHost {
   // ── prompts of the mode pack
   /** A prompt file of a mode's pack with `{{vars}}` filled in, or null if the pack has no such file. */
   prompt(modeId: string, name: string, vars?: Record<string, string>): string | null
+
+  // ── files the stage can fetch
+  /** The folder behind an asset library (`songs`, `asmr`, `motions`, `generated`, ...), or null if there is none. */
+  libraryDir(library: string): string | null
+  /** The URL the stage fetches a file of a library from. Throws if a part of the path is not safe to serve. */
+  assetUrl(library: string, ...parts: string[]): string
+
+  // ── the model, without the persona and the conversation
+  /**
+   * One question to the model, answered as text: for a mode's own planning and analysis (which picture to draw,
+   * what is on the screen). It goes through the same providers, keys and fallbacks as a chat reply, and is
+   * counted under `tag`. Rejects when every provider fails.
+   */
+  llmText(req: LlmTextRequest): Promise<string>
+
+  // ── song requests
+  /** A line about a song (`FORMATS.songQueued` and friends) for the model to react to, ahead of gifts and chat. */
+  songLine(text: string): void
+}
+
+export interface LlmTextRequest {
+  system?: string
+  user: string | ChatPart[]
+  temperature?: number
+  maxOutputTokens?: number
+  timeoutMs?: number
+  signal?: AbortSignal
+  /** Who is asking, for the statistics (for example `draw-plan`). */
+  tag: string
 }
 
 /** What a controller can add to the mode manager's `enter`/`exit`. Every hook is optional. */
@@ -105,6 +143,8 @@ export interface ModeControllerHooks {
   onModelRequest?(request: { name?: string }): Promise<void> | void
   /** The operator asked for the mode from the console, with optional details. */
   onConsoleRequest?(request: Record<string, unknown>): Promise<{ ok: boolean; reason?: string }>
+  /** A viewer's song command was found in chat (request, skip, list, ...). Return true when this mode took it. */
+  onSongCommand?(command: SongCommand): Promise<boolean> | boolean
 }
 
 export type ModeControllerFull = ModeController & ModeControllerHooks

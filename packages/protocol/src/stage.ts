@@ -151,6 +151,29 @@ export const LookSet = z.object({
   dim: z.number().min(0).max(1).default(0),
 })
 
+/**
+ * The fields of `look.set` a mode may override while it is active. A field left out keeps its default, or the
+ * value another active mode gave it.
+ */
+export const LookOverride = z
+  .object({
+    light: z.number().min(0).max(4),
+    mouth_scale: z.number().min(0).max(2),
+    calm: z.number().min(0).max(1),
+    motion_scale: z.number().min(0).max(2),
+    lip_range: z.object({ min: z.number(), max: z.number() }).nullable(),
+    dim: z.number().min(0).max(1),
+  })
+  .partial()
+export type LookOverride = z.infer<typeof LookOverride>
+
+/** Parts of `scene.set.layout` a mode may override while it is active. */
+export const LayoutOverride = z.object({
+  char: CharLayout.optional(),
+  frame: Rect.nullable().optional(),
+})
+export type LayoutOverride = z.infer<typeof LayoutOverride>
+
 /** Optional overrides of the stage's motion/procedural-layer constants. Unknown keys are ignored. */
 export const TuningSet = z.object({
   type: z.literal('tuning.set'),

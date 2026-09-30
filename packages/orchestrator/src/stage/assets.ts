@@ -114,6 +114,13 @@ export function decodeUrlPathSegments(rawPath: string): string[] | null {
   return out
 }
 
+/** `/asset/<library>/<parts...>`, each part percent-encoded. Throws when a part could not be served (`isSafeSegment`). */
+export function assetUrl(library: string, ...parts: string[]): string {
+  for (const p of [library, ...parts])
+    if (!isSafeSegment(p)) throw new Error(`not a safe asset path segment: ${JSON.stringify(p)}`)
+  return `/asset/${[library, ...parts].map(encodeURIComponent).join('/')}`
+}
+
 export function isPathInside(root: string, target: string): boolean {
   const rel = path.relative(root, target)
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)

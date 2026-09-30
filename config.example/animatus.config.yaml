@@ -30,6 +30,13 @@ stage:
     style: bubble                  # bubble | plain
   layout:
     char: { x: 0, y: 0, scale: 1 }
+  # Looks that mode packs ask for by name while the mode is active (see docs/modes.md). Optional: a pack can also
+  # carry the values itself. When the mode ends the stage goes back to what is written above.
+  presets:
+    layouts:
+      corner: { char: { x: 55, y: 0, scale: 0.4 } }     # the character small in a corner, room for a picture or a game
+    backgrounds: {}
+    looks: {}
   # Leave out `browser` to open the stage yourself (OBS browser source, any Chromium in app mode).
   browser:
     executable: C:/Program Files/Google/Chrome/Application/chrome.exe

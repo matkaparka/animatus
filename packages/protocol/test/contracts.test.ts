@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
 import {
   AnimatusEvent,
+  LookOverride,
+  LookSet,
   ModeManifest,
   PluginManifest,
   ServiceHealth,
@@ -44,6 +46,45 @@ stage:
     expect(m.exclusive_with).toEqual([])
     expect(ModeManifest.safeParse({ id: 'Sleep', title: 'x' }).success).toBe(false)
     expect(ModeManifest.safeParse({ id: 'ok', title: 'x', priority: 101 }).success).toBe(false)
+  })
+})
+
+describe('mode manifest: what the stage looks like', () => {
+  it('takes a preset by name or the values themselves, for each of layout, background and look', () => {
+    const m = ModeManifest.parse({
+      id: 'sleep',
+      title: 'Sleep',
+      stage: {
+        layout: { char: { x: 30, y: 0, scale: 0.6 }, frame: null },
+        background: { kind: 'color', color: '#001122' },
+        look: 'sleep',
+      },
+    })
+    expect(m.stage.look).toBe('sleep')
+    expect(m.stage.background).toEqual({ kind: 'color', color: '#001122' })
+    expect(
+      ModeManifest.parse({ id: 'a', title: 'a', stage: { layout: 'frame' } }).stage.layout
+    ).toBe('frame')
+    expect(ModeManifest.parse({ id: 'a', title: 'a' }).stage).toEqual({})
+  })
+
+  it('rejects a preset name that is not a name, a background that is not one, and a look outside the ranges', () => {
+    const bad = (stage: unknown) => ModeManifest.safeParse({ id: 'a', title: 'a', stage }).success
+    expect(bad({ layout: 'Has Spaces' })).toBe(false)
+    expect(bad({ layout: '' })).toBe(false)
+    expect(bad({ background: { kind: 'nothing' } })).toBe(false)
+    expect(bad({ look: { calm: 2 } })).toBe(false)
+    expect(bad({ look: { dim: -1 } })).toBe(false)
+    expect(bad({ layout: { char: { x: 0, y: 0, scale: 0 } } })).toBe(false)
+  })
+
+  it('a look override has exactly the fields of look.set, all optional', () => {
+    const fields = Object.keys(LookSet.shape)
+      .filter((k) => k !== 'type')
+      .sort()
+    expect(Object.keys(LookOverride.shape).sort()).toEqual(fields)
+    expect(LookOverride.parse({})).toEqual({})
+    expect(LookOverride.parse({ calm: 1, lip_range: null })).toEqual({ calm: 1, lip_range: null })
   })
 })
 

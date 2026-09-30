@@ -13,7 +13,7 @@ import { AppError } from '../app/errors.ts'
 import { renderTemplate } from '../brain/prompt.ts'
 import type { ModePrompt } from '../brain/prompt.ts'
 import type { AppConfig } from '../config.ts'
-import type { Batch } from '../inbox/types.ts'
+import type { Batch, SongCommand } from '../inbox/types.ts'
 import type { PluginRegistry, RegistryEntry } from '../plugins/registry.ts'
 import type { Supervisor } from '../plugins/supervisor.ts'
 import { computeMatrix, hashConfig } from './admission.ts'
@@ -276,6 +276,16 @@ export class ModeService extends EventEmitter<Events> {
     return this.enabled.has(id)
   }
 
+  /** The manifest of a mode pack, enabled or not. */
+  manifest(id: string): ModeManifest | undefined {
+    return this.packs.get(id)?.manifest
+  }
+
+  /** Every mode pack that was found. */
+  ids(): string[] {
+    return [...this.packs.keys()]
+  }
+
   active(): string[] {
     return this.manager.active()
   }
@@ -391,6 +401,20 @@ export class ModeService extends EventEmitter<Events> {
       })
     )
     return lines
+  }
+
+  /** A song command from chat goes to the modes that handle songs. True when one took it. */
+  async songCommand(command: SongCommand): Promise<boolean> {
+    let taken = false
+    for (const [id, c] of this.controllers) {
+      if (!c.onSongCommand) continue
+      try {
+        if (await c.onSongCommand(command)) taken = true
+      } catch (e) {
+        this.log('error', `modes: ${id} failed on a song command: ${(e as Error).message}`)
+      }
+    }
+    return taken
   }
 
   /** The model asked for a mode with a tag. */

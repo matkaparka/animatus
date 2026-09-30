@@ -11,9 +11,13 @@
 import { z } from 'zod'
 import { Id } from './common.ts'
 import { PluginId } from './plugin.ts'
+import { Background, LayoutOverride, LookOverride } from './stage.ts'
 
 export const ModeId = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)
 export type ModeId = z.infer<typeof ModeId>
+
+/** The name of a stage preset in the configuration. */
+export const PresetName = z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/)
 
 export const ModeManifest = z.object({
   manifest_version: z.literal(1).default(1),
@@ -48,12 +52,16 @@ export const ModeManifest = z.object({
       events: z.array(z.string().min(1)).default([]),
     })
     .default({ danmaku_prefix: [], gift: [], events: [] }),
-  /** What the stage should look like while the mode is active; names refer to console settings. */
+  /**
+   * What the stage should look like while the mode is active. Each field is either the name of a preset in the
+   * operator's configuration (`stage.presets`) or the values themselves. Leaving the mode puts the stage back;
+   * with several modes active the one with the higher priority wins where they disagree.
+   */
   stage: z
     .object({
-      layout: z.string().optional(),
-      background: z.string().optional(),
-      look: z.string().optional(),
+      layout: z.union([PresetName, LayoutOverride]).optional(),
+      background: z.union([PresetName, Background]).optional(),
+      look: z.union([PresetName, LookOverride]).optional(),
     })
     .default({}),
 })

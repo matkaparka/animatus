@@ -189,6 +189,44 @@ describe('a normal reply', () => {
     expect(req.signal).toBeInstanceOf(AbortSignal)
   })
 
+  it('pictures go with the message just written, as parts of it, and the record keeps only its words', async () => {
+    const llm = scripted(['[neutral]ok.'])
+    const { brain, chat } = setup(llm)
+    chat.append({ role: 'user', content: 'earlier', ts: 1 })
+    chat.append({ role: 'assistant', content: 'answer', ts: 2 })
+    await brain.respond(
+      viewer('what is this', {
+        images: [
+          { mime: 'image/jpeg', base64: 'AAAA' },
+          { mime: 'image/png', base64: 'BBBB' },
+        ],
+      })
+    )
+    const messages = (llm.requests[0] as LlmRequest).messages
+    expect(messages.at(-1)).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this' },
+        { type: 'image', mime: 'image/jpeg', base64: 'AAAA' },
+        { type: 'image', mime: 'image/png', base64: 'BBBB' },
+      ],
+    })
+    expect(messages.slice(1, -1).map((m) => m.content)).toEqual(['earlier', 'answer']) // the earlier ones stay text
+    expect(chat.recent(10).map((e) => e.content)).toEqual([
+      'earlier',
+      'answer',
+      'what is this',
+      '[neutral]ok.',
+    ])
+    expect(JSON.stringify(chat.recent(10))).not.toContain('AAAA')
+
+    // and a reply without pictures is plain again
+    await brain.respond(viewer('next'))
+    expect(
+      (llm.requests[1] as LlmRequest).messages.every((m) => typeof m.content === 'string')
+    ).toBe(true)
+  })
+
   it('passes sampling limits only when they were configured', async () => {
     const a = scripted(['ok.'])
     await setup(a).brain.respond(viewer('x'))

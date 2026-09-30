@@ -173,6 +173,10 @@ async function rig(
     enterMode: (id, o) => service.tryEnter(id, o),
     exitMode: async (id, reason) => void (await service.exit(id, reason)),
     prompt: (mode, name, vars) => service.prompt(mode, name, vars),
+    libraryDir: () => null,
+    assetUrl: (library, ...parts) => `/asset/${[library, ...parts].join('/')}`,
+    llmText: async () => '',
+    songLine: () => {},
   }
 
   service = new ModeService({

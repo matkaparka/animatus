@@ -295,3 +295,218 @@ describe('the dance mode, through the whole program', () => {
     expect(stage.dances).toEqual([])
   })
 })
+
+/** The JSON messages of one type a fake stage has received, loosely typed (a test looks at a few fields). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const jsonSent = (
+  stage: { stage: { received: { kind: string; msg?: any }[] } },
+  type: string
+): any[] =>
+  stage.stage.received.flatMap((x) => (x.kind === 'json' && x.msg.type === type ? [x.msg] : []))
+
+describe('what a mode does to the stage', () => {
+  /** A stand-in mode that only changes how the stage looks. */
+  async function calmRig(pack: string, config: Record<string, unknown> = {}) {
+    const dir = await tempDir('modes')
+    await mkdir(path.join(dir, 'calm-test'), { recursive: true })
+    await writeFile(path.join(dir, 'calm-test', 'mode.yaml'), pack)
+    const r = await rig({
+      app: {
+        modesDirs: [dir],
+        controllers: { 'calm-test': () => ({ enter: async () => {}, exit: async () => {} }) },
+      },
+      config: { modes: { 'calm-test': { enabled: true } }, ...config },
+    })
+    const stage = await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    const sent = (type: string) => jsonSent(stage, type)
+    await until(() => sent('look.set').length >= 1, 3000, 'the first look')
+    return { r, stage, sent }
+  }
+
+  it('applies the look, layout and background when the mode is entered, and puts the configuration back when it is left', async () => {
+    const { r, sent } = await calmRig(
+      `id: calm-test
+title: Calm test
+stage:
+  layout: corner
+  background: night
+  look: { calm: 1, dim: 0.5 }
+`,
+      {
+        stage: {
+          layout: { char: { x: 1, y: 2, scale: 1 } },
+          presets: {
+            layouts: { corner: { char: { x: 55, y: 0, scale: 0.4 } } },
+            backgrounds: { night: { kind: 'color', color: '#001122' } },
+          },
+        },
+      }
+    )
+    const scenes = () => sent('scene.set')
+    const looks = () => sent('look.set')
+    expect(scenes().at(-1)).toMatchObject({
+      layout: { char: { x: 1, y: 2, scale: 1 } },
+      background: { kind: 'none' },
+    })
+    expect(looks().at(-1)).toMatchObject({ calm: 0, dim: 0 })
+
+    await r.app.modes.enter('calm-test')
+    await until(() => scenes().at(-1)?.background.kind === 'color', 3000, 'scene of the mode')
+    expect(scenes().at(-1)).toMatchObject({
+      layout: { char: { x: 55, y: 0, scale: 0.4 } },
+      background: { kind: 'color', color: '#001122' },
+    })
+    await until(() => looks().at(-1)?.calm === 1, 3000, 'look of the mode')
+    expect(looks().at(-1)).toMatchObject({ calm: 1, dim: 0.5, light: 1 })
+
+    await r.app.modes.exit('calm-test')
+    await until(() => scenes().at(-1)?.background.kind === 'none', 3000, 'scene restored')
+    expect(scenes().at(-1)).toMatchObject({ layout: { char: { x: 1, y: 2, scale: 1 } } })
+    await until(() => looks().at(-1)?.calm === 0, 3000, 'look restored')
+  })
+
+  it("a stage that connects while the mode is active gets the mode's stage, not the configuration", async () => {
+    const { r } = await calmRig(
+      `id: calm-test\ntitle: Calm test\nstage:\n  look: { calm: 0.8 }\n  background: { kind: color, color: "#102030" }\n`
+    )
+    await r.app.modes.enter('calm-test')
+    const late = await r.connect()
+    await until(() => jsonSent(late, 'look.set').length >= 1, 3000, 'look on connect')
+    expect(jsonSent(late, 'scene.set')[0].background).toEqual({ kind: 'color', color: '#102030' })
+    expect(jsonSent(late, 'look.set')[0].calm).toBe(0.8)
+  })
+
+  it('a preset the configuration does not have is an alarm while the mode lasts, and the rest still applies', async () => {
+    const { r, sent } = await calmRig(
+      `id: calm-test\ntitle: Calm test\nstage:\n  layout: nowhere\n  look: { calm: 1 }\n`
+    )
+    await r.app.modes.enter('calm-test')
+    await until(() => sent('look.set').at(-1)?.calm === 1, 3000)
+    const alarm = r.app.alarms.list().find((a) => a.code === 'mode_stage_preset')
+    expect(alarm?.message).toContain('the layout "nowhere" is not in stage.presets.layouts')
+    await r.app.modes.exit('calm-test')
+    expect(r.app.alarms.list().some((a) => a.code === 'mode_stage_preset')).toBe(false)
+  })
+})
+
+describe('what a mode can use of the program', () => {
+  type Host = Parameters<NonNullable<NonNullable<RigOptions['app']>['controllers']>[string]>[0]
+
+  /** A stand-in mode whose controller hands its host to the test. */
+  async function probeRig() {
+    const dir = await tempDir('modes')
+    await mkdir(path.join(dir, 'probe'), { recursive: true })
+    await writeFile(path.join(dir, 'probe', 'mode.yaml'), 'id: probe\ntitle: Probe\n')
+    const songs: unknown[] = []
+    let host!: Host
+    const r = await rig({
+      app: {
+        modesDirs: [dir],
+        controllers: {
+          probe: (h) => {
+            host = h
+            return {
+              enter: async () => {},
+              exit: async () => {},
+              onSongCommand: (c) => (songs.push(c), c.kind !== 'list'),
+            }
+          },
+        },
+      },
+      config: { modes: { probe: { enabled: true } } },
+    })
+    return { r, songs, host: () => host }
+  }
+
+  it('asks the model a plain question, through the same providers, counted under the tag', async () => {
+    const { r, host } = await probeRig()
+    r.llm.reply = () => ['{"pick":', ' 2}']
+    const text = await host().llmText({
+      tag: 'draw-plan',
+      system: 'Answer in JSON.',
+      user: 'which one?',
+      temperature: 0.2,
+      maxOutputTokens: 50,
+    })
+    expect(text).toBe('{"pick": 2}')
+    const req = r.llm.requests.at(-1)!
+    expect(req.tag).toBe('draw-plan')
+    expect(req.temperature).toBe(0.2)
+    expect(req.maxOutputTokens).toBe(50)
+    expect(req.messages.map((m) => [m.role, m.content])).toEqual([
+      ['system', 'Answer in JSON.'],
+      ['user', 'which one?'],
+    ])
+    r.llm.reply = () => [new Error('provider down')]
+    await expect(host().llmText({ tag: 'x', user: 'again' })).rejects.toThrow('provider down')
+  })
+
+  it('shows the model a picture together with what it is told, and the picture is not remembered', async () => {
+    const { r, host } = await probeRig()
+    r.llm.reply = () => ['[happy]Nice picture.']
+    await host().tellBrain('【系统】A viewer asked for this picture.', {
+      images: [{ mime: 'image/png', base64: 'iVBORw0KGgo=' }],
+    })
+    const last = r.llm.requests.at(-1)!.messages.at(-1)!
+    expect(last.role).toBe('user')
+    expect(last.content).toEqual([
+      { type: 'text', text: '【系统】A viewer asked for this picture.' },
+      { type: 'image', mime: 'image/png', base64: 'iVBORw0KGgo=' },
+    ])
+    expect(JSON.stringify(r.app.chat.recent(10))).not.toContain('iVBORw0KGgo=')
+  })
+
+  it('gives files a place the stage can fetch them from: data/generated is always served, and a URL for anything in a library', async () => {
+    const { r, host } = await probeRig()
+    const dir = host().libraryDir('generated')
+    expect(dir).toBe(path.join(r.dir, 'data', 'generated'))
+    expect(host().libraryDir('nothing')).toBeNull()
+    await writeFile(path.join(dir as string, 'pic 1.png'), Buffer.from('not really a png'))
+    const url = host().assetUrl('generated', 'pic 1.png')
+    expect(url).toBe('/asset/generated/pic%201.png')
+    const res = await fetch(new URL(url, r.app.stage.url))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(await res.text()).toBe('not really a png')
+    expect(() => host().assetUrl('generated', '..', 'x')).toThrow('not a safe asset path segment')
+    expect(() => host().assetUrl('generated', 'a/b')).toThrow('not a safe asset path segment')
+  })
+
+  it("a viewer's song command reaches the modes that handle songs; one nobody takes is said to be ignored", async () => {
+    const { r, songs } = await probeRig()
+    await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    r.bili.emit(danmaku('点歌 晴天'))
+    await until(() => songs.length >= 1, 3000, 'the song command')
+    expect(songs[0]).toMatchObject({ kind: 'request', name: 'ann', keyword: '晴天' })
+    expect(r.app.runLog.recent(50).some((e) => e.text.includes('ignored'))).toBe(false)
+
+    r.bili.emit(danmaku('歌单'))
+    await until(
+      () => r.app.runLog.recent(50).some((e) => e.text.includes('song command "list" ignored')),
+      3000,
+      'the ignored note'
+    )
+  })
+
+  it('a song line goes to the model ahead of the chat, like any other batch', async () => {
+    const { r, host } = await probeRig()
+    await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    host().songLine('（点歌）ann 点了《晴天》，已排入队列。')
+    await until(() => r.llm.requests.length >= 1, 4000, 'the model call')
+    expect(String(r.llm.requests[0]!.messages.at(-1)!.content)).toContain('点了《晴天》')
+  })
+
+  it('without a controller for songs, a song command is only noted', async () => {
+    const r = await rig()
+    await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    r.bili.emit(danmaku('点歌 晴天'))
+    await until(
+      () => r.app.runLog.recent(50).some((e) => e.text.includes('song command "request" ignored')),
+      3000
+    )
+  })
+})

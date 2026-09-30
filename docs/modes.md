@@ -136,3 +136,48 @@ cooldown) and its name (so the next random pick is another one).
 | `pending_timeout_sec` | 90 | how long a request waits for the reply that carried it to be spoken |
 | `outro_window_sec` | 8 | how long the model has to start its closing line before the queue is released anyway |
 | `start_timeout_sec` | 30 | the stage must report the dance as playing within this long |
+
+## What a mode does to the stage
+
+A pack's `stage:` section says how the stage should look while the mode is active. Each of `layout`,
+`background` and `look` is either the values themselves or the **name of a preset** in the operator's
+configuration:
+
+```yaml
+# modes/sleep/mode.yaml
+stage:
+  look: { calm: 1, dim: 0.6, mouth_scale: 0.6, light: 0.6 }     # values (any subset of look.set)
+  background: night                                            # a name: stage.presets.backgrounds.night
+  layout: corner                                               # a name: stage.presets.layouts.corner
+```
+
+```yaml
+# config/animatus.config.yaml
+stage:
+  presets:
+    layouts:     { corner: { char: { x: 55, y: 0, scale: 0.4 } }, frame: { char: { x: 40, y: 5, scale: 0.5 }, frame: { left: 5, top: 5, width: 60, height: 80 } } }
+    backgrounds: { night: { kind: image, url: /asset/models/night.png, dim: 0.3 } }
+    looks:       { quiet: { calm: 0.7 } }
+```
+
+When a mode becomes active the application sends the composed scene and look; when it is left the stage goes
+back to the configuration (or to what the remaining active modes ask for). Layout fields and look fields merge
+one by one, a background replaces the whole background, and where two active modes disagree the one with the
+higher `priority` wins. A name the configuration does not have is a `mode_stage_preset` alarm for as long as the
+mode is active; whatever else the mode asked for still applies. A stage that connects while a mode is active
+gets that mode's stage, not the plain configuration.
+
+## What a controller can use
+
+Beyond the stage, the voice and the model (see the host above), a `ModeHost` gives a controller:
+
+| Member | For |
+|---|---|
+| `libraryDir(name)`, `assetUrl(name, ...parts)` | files the stage fetches: `songs`, `asmr`, `motions` (from `paths.*`) and `generated` (always `data/generated`, made at start). `assetUrl` throws for a path that could not be served |
+| `llmText({ tag, system, user, ... })` | one question to the model without persona and history, answered as text: planning, analysis. Same providers, keys and fallbacks as chat; counted under `tag` |
+| `tellBrain(text, { images })` | a system message the model answers in character, with pictures it should look at (not kept in the record) |
+| `songLine(text)` | a line about a song (`FORMATS.songQueued` and friends) for the model to react to, ahead of gifts and chat |
+| hook `onSongCommand(cmd)` | a viewer's `点歌 …`, `切歌`, `歌单`, `取消点歌` command; return true when the mode took it, otherwise the run page says it was ignored |
+
+`test/modes/fakeHost.ts` is a `ModeHost` made of fakes that write down what a controller did (see the header of
+that file); `test/modes/dance.test.ts` shows a controller tested through the real mode service instead.
