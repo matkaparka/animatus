@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from forge_service.blocklist import Blocklist, BlocklistError, parse_words
+from forge_service.blocklist import BOM, Blocklist, BlocklistError, parse_words
 
 CASES = json.loads((Path(__file__).parent / "blocklist_cases.json").read_text(encoding="utf-8"))
 
@@ -34,7 +34,7 @@ class BlocklistTest(unittest.TestCase):
             self.assertEqual(bl.hit(case["text"]), case["word"], case["text"])
 
     def test_comments_blank_lines_and_a_bom_are_skipped(self) -> None:
-        self.assertEqual(parse_words("﻿# comment\n\n  nsfw  \n#nude\r\nsex\r\n"), ["nsfw", "sex"])
+        self.assertEqual(parse_words(BOM + "# comment\n\n  nsfw  \n#nude\r\nsex\r\n"), ["nsfw", "sex"])
 
     def test_several_files_are_one_list(self) -> None:
         bl = Blocklist([self.write("a.txt", "alpha"), self.write("b.txt", "beta")])

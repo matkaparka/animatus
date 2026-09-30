@@ -4,6 +4,7 @@ from pathlib import Path
 
 import yaml
 
+from forge_service.blocklist import BOM
 from forge_service.settings import (
     DEFAULT_BLOCKLIST,
     SettingsError,
@@ -119,7 +120,7 @@ class SettingsTest(unittest.TestCase):
 
     def test_a_file_with_a_bom_loads(self) -> None:
         f = self.dir / "s.yaml"
-        f.write_text("﻿" + yaml.safe_dump(minimal()), encoding="utf-8")
+        f.write_text(BOM + yaml.safe_dump(minimal()), encoding="utf-8")
         self.assertEqual(len(load_settings(f, data_dir=self.dir).families), 1)
 
 

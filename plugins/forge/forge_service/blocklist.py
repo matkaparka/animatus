@@ -24,6 +24,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 _SEPARATORS = re.compile(r"[^a-z0-9]+")
+BOM = "\N{ZERO WIDTH NO-BREAK SPACE}"
 
 
 class BlocklistError(Exception):
@@ -73,7 +74,7 @@ class _Entry:
 
 def parse_words(content: str) -> list[str]:
     words = []
-    for line in content.lstrip("﻿").splitlines():
+    for line in content.lstrip(BOM).splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             words.append(line)
