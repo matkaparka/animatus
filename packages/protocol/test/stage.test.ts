@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   AssetUrl,
+  CameraAdjust,
   LookSet,
   MAX_UPSTREAM_BYTES,
+  OverlaySet,
   PROTOCOL_VERSION,
   StageDownstream,
   StageUpstream,
@@ -62,6 +64,49 @@ describe('downstream messages', () => {
     expect(ok.success && ok.data.type === 'scene.set' && ok.data.camera.fit).toBe('upper_body')
     expect(scene({ fov: 30 }).success).toBe(true)
     expect(scene({ fit: 'closeup' }).success).toBe(false)
+  })
+
+  it('a camera that was never touched has the identity adjustment and is not locked', () => {
+    const r = StageDownstream.parse({
+      type: 'scene.set',
+      model: null,
+      layout: { char: { x: 0, y: 0, scale: 1 } },
+      background: { kind: 'none' },
+    })
+    if (r.type !== 'scene.set') throw new Error('wrong type')
+    expect(r.camera.adjust).toEqual({ yaw: 0, pitch: 0, zoom: 1, pan: [0, 0, 0] })
+    expect(r.camera.locked).toBe(false)
+  })
+
+  it('the camera adjustment is bounded on every axis', () => {
+    const adjust = (a: unknown) => CameraAdjust.safeParse(a).success
+    expect(adjust({})).toBe(true)
+    expect(adjust({ yaw: 3, pitch: 1.4, zoom: 0.5, pan: [1, -1, 0.5] })).toBe(true)
+    expect(adjust({ yaw: 4 })).toBe(false)
+    expect(adjust({ pitch: 1.6 })).toBe(false)
+    expect(adjust({ zoom: 0 })).toBe(false)
+    expect(adjust({ zoom: 9 })).toBe(false)
+    expect(adjust({ pan: [5, 0, 0] })).toBe(false)
+    expect(adjust({ pan: [0, 0] })).toBe(false)
+    expect(adjust({ yaw: Number.NaN })).toBe(false)
+  })
+
+  it('the subtitle overlay carries a variant, and only the two known ones', () => {
+    const ok = OverlaySet.safeParse({
+      type: 'overlay.set',
+      id: 'subtitle',
+      visible: true,
+      text: 'Nova',
+      variant: 'bubble',
+    })
+    expect(ok.success).toBe(true)
+    expect(
+      OverlaySet.safeParse({ type: 'overlay.set', id: 'subtitle', visible: true, variant: 'neon' })
+        .success
+    ).toBe(false)
+    expect(
+      OverlaySet.safeParse({ type: 'overlay.set', id: 'subtitle', visible: true }).success
+    ).toBe(true)
   })
 
   it('look.set with no fields yields the neutral look', () => {
@@ -160,6 +205,22 @@ describe('upstream is a closed set of reports', () => {
         })
       )
     ).not.toBeNull()
+  })
+
+  it('accepts a camera adjustment report, and only a valid one', () => {
+    const ok = parseUpstream(
+      JSON.stringify({
+        type: 'camera.adjusted',
+        adjust: { yaw: 0.4, pitch: -0.1, zoom: 0.8, pan: [0.1, 0, -0.2] },
+      })
+    )
+    expect(ok).toMatchObject({ type: 'camera.adjusted', adjust: { zoom: 0.8 } })
+    expect(
+      parseUpstream(JSON.stringify({ type: 'camera.adjusted', adjust: { zoom: 100 } }))
+    ).toBeNull()
+    expect(parseUpstream(JSON.stringify({ type: 'camera.adjusted' }))).toBeNull()
+    // there is no command the stage could send to set the camera, only this report
+    expect(StageUpstream.safeParse({ type: 'camera.set', adjust: {} }).success).toBe(false)
   })
 
   it('accepts hello and fills capabilities', () => {

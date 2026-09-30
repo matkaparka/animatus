@@ -114,6 +114,8 @@ export interface RigOptions {
   noTts?: boolean
   /** Directory of plugin folders. Default: an empty one. */
   pluginsDir?: string
+  /** Runs once the working directory exists (put files in it); what it returns is merged into the configuration. */
+  prepare?: (dir: string) => Promise<AppConfigInput> | AppConfigInput
 }
 
 export async function rig(options: RigOptions = {}): Promise<Rig> {
@@ -129,6 +131,7 @@ export async function rig(options: RigOptions = {}): Promise<Rig> {
   await writeFile(path.join(motions, 'poses', 'nod.vrma'), 'x')
   const pluginsDir = options.pluginsDir ?? path.join(dir, 'plugins')
   await mkdir(pluginsDir, { recursive: true })
+  const extraConfig = (await options.prepare?.(dir)) ?? {}
 
   const config = parseConfig(
     {
@@ -137,6 +140,7 @@ export async function rig(options: RigOptions = {}): Promise<Rig> {
       persona,
       inbox: { pacer: { idle_settle_sec: 0.05, min_interval_sec: 0.05, busy_timeout_sec: 5 } },
       sources: { bilibili: { enabled: true, room_id: 1234 } },
+      ...extraConfig,
       ...options.config,
     },
     { root: dir }

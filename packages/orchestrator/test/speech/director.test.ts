@@ -244,6 +244,27 @@ describe('SpeechDirector: text rules', () => {
     expect(tts.calls[0]!.req.text).toBe('this has a 哔 in it')
   })
 
+  it('shows what is said as the subtitle unless the caller says otherwise, with the same word filter', async () => {
+    const { d, tts, stage } = setup({
+      filter: new SpeechFilter(['secretword']),
+      stageQueueMax: 10,
+      lookahead: 10,
+    })
+    tts.auto = true
+    const t = d.beginTurn('t')
+    t.enqueue(item('Nothing special here.'))
+    t.enqueue(item('A secretword slipped in.'))
+    t.enqueue(item('Spoken but not shown.', { subtitle: '' }))
+    t.enqueue(item('Spoken as this.', { subtitle: 'Shown as that, with a secretword.' }))
+    await tick(12)
+    const words = stage.begun.map((b) => b.args.subtitle)
+    expect(words).toHaveLength(4)
+    expect(words[0]).toBe('Nothing special here.')
+    expect(words[1]).toBe('A 哔 slipped in.')
+    expect(words[2]).toBeUndefined()
+    expect(words[3]).toBe('Shown as that, with a 哔.')
+  })
+
   it('passes style, speed and the subtitle through', async () => {
     const { d, tts, stage } = setup()
     tts.auto = true

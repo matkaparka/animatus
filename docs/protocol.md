@@ -52,6 +52,26 @@ chosen part and its width fit, re-fitting when the window's shape changes. `fit`
 `position`, `target` and `follow_head`. A re-sent `scene.set` keeps the measurement, so the camera does not
 jump when the orchestrator reconnects.
 
+### The mouse
+
+The stage window is the one place the operator can frame the shot by hand, as in the legacy viewer: left drag
+orbits, right drag (or shift/ctrl + left drag) pans, the wheel and middle drag zoom, a double click starts
+over. The pointer is a grab hand over the stage. The result is a `CameraAdjust` (yaw, pitch, zoom, pan) that is
+*relative* to the pose the configuration gives, so it stays meaningful when the model, its size or the window
+changes. When a gesture ends the stage reports it (`camera.adjusted`); the orchestrator keeps it in
+`data/stage-state.json` and echoes it in `scene.set.camera.adjust`, so it survives a page reload and a
+restart. `camera.locked: true` makes the stage ignore the mouse (a composition that must not move by
+accident during a broadcast). An adjustment made while the stage is disconnected is not kept.
+
+## Spoken subtitle
+
+`utterance.begin.subtitle` is shown on the `subtitle` overlay from the moment that sentence starts to sound
+until the next one replaces it, and stays about two seconds after the last one (a cut-off sentence takes its
+words with it). The overlay is switched on and styled by `overlay.set` for `subtitle`: `variant` is `bubble`
+(rounded translucent box) or `plain` (bare words with a shadow), and `text` is an optional name badge above the
+words. The orchestrator fills the subtitle with the sentence as written (motion and emotion tags removed) and
+applies the same sensitive-word replacement as for the voice.
+
 ## Lip sync profile
 
 If the orchestrator serves a library named `lipsync`, the stage loads `/asset/lipsync/profile.json` (a wLipSync
@@ -78,7 +98,7 @@ A VRMA stream completes before that utterance's audio starts. An audio stream al
 ## Upstream reports
 
 `hello`, `model.state`, `audio.state`, `playback.started`, `playback.ended`, `dance.state`,
-`sing.state`, `sleep.state`, `stats`, `error`, `debug.reply`, `pong`.
+`sing.state`, `sleep.state`, `stats`, `error`, `debug.reply`, `pong`, `camera.adjusted`.
 
 `playback.ended` carries the reason (`done`, `cancelled`, `error`, `timeout`, `audio_suspended`,
 `superseded`) and the number of buffer underruns. `stats` includes the counters the soak test checks:

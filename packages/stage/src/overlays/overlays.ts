@@ -15,6 +15,8 @@ export class Overlays {
   private lyric = ''
   private subtitleBySlot: Record<Slot, string> = { utterance: '', track: '' }
   private frameImg: HTMLImageElement
+  private readonly subtitleName: HTMLElement
+  private readonly subtitleWords: HTMLElement
 
   constructor(
     private readonly root: HTMLElement,
@@ -32,7 +34,13 @@ export class Overlays {
     }
     mk('credit', 'ov-credit')
     mk('lyrics', 'ov-lyrics')
-    mk('subtitle', 'ov-subtitle')
+    const subtitle = mk('subtitle', 'ov-subtitle')
+    this.subtitleName = this.doc.createElement('div')
+    this.subtitleName.className = 'ov-name'
+    this.subtitleName.style.display = 'none'
+    this.subtitleWords = this.doc.createElement('div')
+    this.subtitleWords.className = 'ov-words'
+    subtitle.append(this.subtitleName, this.subtitleWords)
     mk('notice', 'ov-notice')
     const frame = mk('frame', 'ov-frame')
     this.frameImg = this.doc.createElement('img')
@@ -47,6 +55,8 @@ export class Overlays {
   set(msg: OverlaySet): void {
     this.visible.set(msg.id, msg.visible)
     if (msg.text !== undefined) this.staticText.set(msg.id, msg.text)
+    if (msg.id === 'subtitle' && msg.variant)
+      (this.els.get('subtitle') as HTMLElement).dataset.variant = msg.variant
     if (msg.id === 'frame') {
       if (msg.rect) {
         const el = this.els.get('frame') as HTMLElement
@@ -107,6 +117,21 @@ export class Overlays {
     }
   }
 
+  /** The words go in their own element so that a name badge can sit above them; both are text, never HTML. */
+  private showSubtitle(words: string): void {
+    const el = this.els.get('subtitle') as HTMLElement
+    if (!words) {
+      el.style.display = 'none'
+      if (this.subtitleWords.textContent) this.subtitleWords.textContent = ''
+      return
+    }
+    if (this.subtitleWords.textContent !== words) this.subtitleWords.textContent = words
+    const name = this.staticText.get('subtitle') ?? ''
+    if (this.subtitleName.textContent !== name) this.subtitleName.textContent = name
+    this.subtitleName.style.display = name ? '' : 'none'
+    el.style.display = ''
+  }
+
   private render(): void {
     const on = (id: OverlayId) => this.visible.get(id) === true
     this.show(
@@ -114,8 +139,7 @@ export class Overlays {
       this.activityCredit ?? (on('credit') ? (this.staticText.get('credit') ?? '') : '')
     )
     this.show('lyrics', on('lyrics') ? this.lyric : '')
-    this.show(
-      'subtitle',
+    this.showSubtitle(
       on('subtitle') ? this.subtitleBySlot.utterance || this.subtitleBySlot.track : ''
     )
     this.show('notice', on('notice') ? (this.staticText.get('notice') ?? '') : '')

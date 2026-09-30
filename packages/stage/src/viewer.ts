@@ -1,14 +1,27 @@
 import * as THREE from 'three'
+import { NO_CAMERA_ADJUST } from '@animatus/protocol'
 import type { CameraConfig, CharLayout } from '@animatus/protocol'
-import { fitCamera, type BodyMetrics } from './camera.ts'
+import {
+  applyAdjust,
+  clampAdjust,
+  dollyAdjust,
+  fitCamera,
+  orbitAdjust,
+  panAdjust,
+  type Adjust,
+  type BodyMetrics,
+  type Pose,
+  type Vec3,
+} from './camera.ts'
 
 /** Base light intensities; the scene's `lighting.intensity` and the look's `light` multiply them. */
 const DIRECTIONAL = 1.8
 const AMBIENT = 1.2
 
 /**
- * Renderer, camera and lights. There are no camera controls: the camera is placed from the scene
- * snapshot and, once the model is up, from what was measured of it (its head height, or a fit).
+ * Renderer, camera and lights. The camera is placed from the scene snapshot and, once the model is up, from
+ * what was measured of it (its head height, or a fit). On top of that sits the operator's mouse adjustment
+ * (orbit, pan, zoom), which is relative to that base pose and reported to the orchestrator, not kept here.
  */
 export class Viewer {
   readonly scene = new THREE.Scene()
@@ -24,9 +37,16 @@ export class Viewer {
     target: [0, 1.3, 0],
     follow_head: true,
     fit: 'none',
+    adjust: NO_CAMERA_ADJUST,
+    locked: false,
   }
   /** Measured once per model, so a re-sent scene snapshot puts the camera back where it was. */
   private body: BodyMetrics | null = null
+  private adjust: Adjust = { ...NO_CAMERA_ADJUST, pan: [...NO_CAMERA_ADJUST.pan] as Vec3 }
+  /** The camera's own axes after the last placement, for panning. */
+  private axes: { right: Vec3; up: Vec3 } = { right: [1, 0, 0], up: [0, 1, 0] }
+  /** A gesture is in progress: an echoed snapshot must not pull the camera out from under the pointer. */
+  private interacting = false
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true })
@@ -54,7 +74,14 @@ export class Viewer {
 
   applyCamera(cfg: CameraConfig): void {
     this.cfg = cfg
+    if (!this.interacting)
+      this.adjust = clampAdjust({ ...cfg.adjust, pan: [...cfg.adjust.pan] as Vec3 })
     this.place()
+  }
+
+  /** The mouse does nothing while the composition is locked. */
+  get locked(): boolean {
+    return this.cfg.locked
   }
 
   /**
@@ -87,20 +114,63 @@ export class Viewer {
     this.renderer.render(this.scene, this.camera)
   }
 
-  private place(): void {
+  // ─────────────────────────── the operator's mouse ───────────────────────────
+
+  get currentAdjust(): Adjust {
+    return { ...this.adjust, pan: [...this.adjust.pan] as Vec3 }
+  }
+
+  setInteracting(on: boolean): void {
+    this.interacting = on
+  }
+
+  private get heightPx(): number {
+    return this.canvas.clientHeight || window.innerHeight || 1
+  }
+
+  orbit(dxPx: number, dyPx: number): void {
+    this.adjust = orbitAdjust(this.adjust, dxPx, dyPx, this.heightPx)
+    this.place()
+  }
+
+  pan(dxPx: number, dyPx: number): void {
+    this.adjust = panAdjust(this.adjust, dxPx, dyPx, this.heightPx, this.axes.right, this.axes.up)
+    this.place()
+  }
+
+  dolly(deltaY: number): void {
+    this.adjust = dollyAdjust(this.adjust, deltaY)
+    this.place()
+  }
+
+  /** Back to the pose the configuration gives (double click). */
+  resetAdjust(): void {
+    this.adjust = { ...NO_CAMERA_ADJUST, pan: [...NO_CAMERA_ADJUST.pan] as Vec3 }
+    this.place()
+  }
+
+  // ─────────────────────────── placement ───────────────────────────
+
+  /** The pose before the operator's adjustment: fixed numbers, the head height, or a fit by the measured body. */
+  private basePose(): Pose {
     const { cfg, body, camera } = this
-    camera.fov = cfg.fov
-    if (body && cfg.fit !== 'none') {
-      const f = fitCamera(cfg.fit, cfg.fov, camera.aspect, body)
-      camera.position.set(...f.position)
-      camera.lookAt(...f.target)
-    } else if (body && cfg.follow_head) {
-      camera.position.set(cfg.position[0], body.headY, cfg.position[2])
-      camera.lookAt(body.x, body.headY, body.z)
-    } else {
-      camera.position.set(...cfg.position)
-      camera.lookAt(...cfg.target)
+    if (body && cfg.fit !== 'none') return fitCamera(cfg.fit, cfg.fov, camera.aspect, body)
+    if (body && cfg.follow_head) {
+      return {
+        position: [cfg.position[0], body.headY, cfg.position[2]],
+        target: [body.x, body.headY, body.z],
+      }
     }
+    return { position: [...cfg.position] as Vec3, target: [...cfg.target] as Vec3 }
+  }
+
+  private place(): void {
+    const { cfg, camera } = this
+    camera.fov = cfg.fov
+    const p = applyAdjust(this.basePose(), cfg.fov, this.adjust)
+    this.axes = { right: p.right, up: p.up }
+    camera.position.set(...p.position)
+    camera.lookAt(...p.target)
     camera.updateProjectionMatrix()
   }
 }

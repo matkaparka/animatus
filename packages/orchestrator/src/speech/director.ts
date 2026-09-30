@@ -28,7 +28,7 @@ export interface SpeechItem {
   /** Voice style (reference audio) key; default neutral. */
   style?: string
   speed?: number
-  /** Text shown on the stage's subtitle overlay while this sentence plays. */
+  /** Text shown on the stage's subtitle overlay while this sentence plays. Default: the sentence itself; '' shows nothing. */
   subtitle?: string
 }
 
@@ -310,6 +310,11 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
     const filtered = this.o.filter ? this.o.filter.apply(item.text) : item.text
     const text = cleanSpeechText(filtered)
     if (!isSpeakable(text)) return false
+    // Whatever is said is shown, unless the caller gave the words itself (an empty string shows nothing). The words
+    // on screen are public like the voice is: a word the voice replaces is replaced in them too.
+    const shown = item.subtitle ?? item.text
+    const words = this.o.filter ? this.o.filter.apply(shown) : shown
+    if (words !== item.subtitle) item = { ...item, subtitle: words }
     const seq = this.seq++
     const id = `${turn.id}-${++this.counter}`
     const useLive = !item.motion && this.nextUsesLive()

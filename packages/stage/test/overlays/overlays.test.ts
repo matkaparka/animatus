@@ -106,3 +106,39 @@ describe('Backdrop', () => {
     expect(night.style.background).toContain('rgba')
   })
 })
+
+describe('the spoken subtitle', () => {
+  it('shows the words in their own element, with an optional name badge above them', () => {
+    const { ov, el } = setup()
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true, text: 'Nova' })
+    expect(el('subtitle').style.display).toBe('none') // nothing is being said
+    ov.setSubtitle('utterance', 'Hello there.')
+    expect(el('subtitle').style.display).toBe('')
+    expect(el('subtitle').querySelector('.ov-words')?.textContent).toBe('Hello there.')
+    const badge = el('subtitle').querySelector('.ov-name') as HTMLElement
+    expect(badge.textContent).toBe('Nova')
+    expect(badge.style.display).toBe('')
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true, text: '' })
+    expect((el('subtitle').querySelector('.ov-name') as HTMLElement).style.display).toBe('none')
+  })
+
+  it('takes a variant, and defaults to the bubble', () => {
+    const { ov, el } = setup()
+    expect(el('subtitle').dataset.variant).toBeUndefined()
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true, variant: 'plain' })
+    expect(el('subtitle').dataset.variant).toBe('plain')
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true, variant: 'bubble' })
+    expect(el('subtitle').dataset.variant).toBe('bubble')
+  })
+
+  it('does not show when the overlay is switched off, and is emptied when the words go', () => {
+    const { ov, el } = setup()
+    ov.setSubtitle('utterance', 'said while the overlay was off')
+    expect(el('subtitle').style.display).toBe('none')
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true })
+    expect(el('subtitle').style.display).toBe('')
+    ov.setSubtitle('utterance', '')
+    expect(el('subtitle').style.display).toBe('none')
+    expect(el('subtitle').querySelector('.ov-words')?.textContent).toBe('')
+  })
+})

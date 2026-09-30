@@ -27,6 +27,7 @@ import {
   type ModelInfo,
 } from './avatar/index.ts'
 import { FrameStats } from './diag/stats.ts'
+import { CameraInput } from './input.ts'
 import { StageClient, helloMessage } from './net/client.ts'
 import { Backdrop } from './overlays/backdrop.ts'
 import { Overlays } from './overlays/overlays.ts'
@@ -60,6 +61,8 @@ interface Avatar {
 
 /** How long after the last utterance ends the face returns to neutral. */
 const NEUTRAL_AFTER_MS = 1500
+/** How long the last spoken words stay on screen after the voice has finished. */
+const SUBTITLE_HOLD_MS = 1800
 
 const NEUTRAL_LOOK: Msg<'look.set'> = {
   type: 'look.set',
@@ -91,6 +94,7 @@ const loadVrmaCached = (url: string) => {
  */
 export class Stage {
   private readonly viewer: Viewer
+  private readonly input: CameraInput
   private readonly engine: AudioEngine
   private readonly lip: LipSync
   private readonly speech: SpeechPlayer
@@ -116,9 +120,14 @@ export class Stage {
   private counters = { tposeFrames: 0, framesTotal: 0, modelsLoaded: 0 }
   private liveClips = new Map<string, THREE.AnimationClip | null>()
   private neutralTimer: number | null = null
+  private subtitleTimer: number | null = null
 
   constructor(private readonly opts: StageOptions) {
     this.viewer = new Viewer(opts.canvas)
+    // The operator's mouse moves the camera at once; what it ends up as is reported, and the orchestrator keeps it.
+    this.input = new CameraInput(opts.canvas, this.viewer, {
+      onSettled: (adjust) => this.send({ type: 'camera.adjusted', adjust }),
+    })
     this.engine = new AudioEngine()
     this.lip = new LipSync(this.engine)
     this.overlays = new Overlays(opts.overlaysRoot)
@@ -211,6 +220,8 @@ export class Stage {
     this.dance.abort()
     this.sing.abort()
     this.sleep.abort()
+    if (this.subtitleTimer !== null) window.clearTimeout(this.subtitleTimer)
+    this.subtitleTimer = null
     this.overlays.reset()
   }
 
@@ -290,6 +301,7 @@ export class Stage {
   private applyScene(msg: Msg<'scene.set'>): void {
     this.viewer.applyLayout(msg.layout.char)
     this.viewer.applyCamera(msg.camera)
+    this.input.synced()
     this.sceneLight = msg.lighting.intensity
     this.viewer.setLighting(this.sceneLight, this.look.light)
     this.backdrop.apply(msg.background)
@@ -499,12 +511,27 @@ export class Stage {
     if (b.motion && this.look.calm <= 0.5) void this.playClip(b.motion)
     // The live clip never delays speech: if it was not ready by now, this utterance uses the talk clips.
     a?.director.beginUtterance(b.motion ? null : (this.liveClips.get(u.id) ?? null))
+    if (this.subtitleTimer !== null) {
+      window.clearTimeout(this.subtitleTimer)
+      this.subtitleTimer = null
+    }
     if (b.subtitle) this.overlays.setSubtitle('utterance', b.subtitle)
   }
 
-  private onUtteranceEnd(u: UtteranceView, _reason: EndReason): void {
+  private onUtteranceEnd(u: UtteranceView, reason: EndReason): void {
     this.liveClips.delete(u.id)
-    this.overlays.setSubtitle('utterance', '')
+    // The words stay a moment after the voice stops (and through the gap to the next sentence, which replaces
+    // them); a cut-off sentence takes its words with it.
+    if (this.subtitleTimer !== null) window.clearTimeout(this.subtitleTimer)
+    this.subtitleTimer = null
+    if (reason === 'done') {
+      this.subtitleTimer = window.setTimeout(() => {
+        this.subtitleTimer = null
+        this.overlays.setSubtitle('utterance', '')
+      }, SUBTITLE_HOLD_MS)
+    } else {
+      this.overlays.setSubtitle('utterance', '')
+    }
     // Back to a neutral face when nothing follows for a moment (the legacy queue did this after 1.5 s).
     if (this.neutralTimer !== null) window.clearTimeout(this.neutralTimer)
     this.neutralTimer = window.setTimeout(() => {

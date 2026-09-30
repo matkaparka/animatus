@@ -43,6 +43,26 @@ export type Background = z.infer<typeof Background>
 export const CameraFit = z.enum(['none', 'head', 'upper_body', 'full_body'])
 export type CameraFit = z.infer<typeof CameraFit>
 
+/**
+ * How the operator has moved the camera with the mouse, relative to the pose the rest of `CameraConfig`
+ * gives (fixed numbers, head height or a fit). Relative, so it stays meaningful when the model, its size or
+ * the window changes. All zero and one means "not touched".
+ */
+export const CameraAdjust = z.object({
+  /** Orbit around the target, radians (left drag). */
+  yaw: z.number().min(-Math.PI).max(Math.PI).default(0),
+  /** Orbit up (positive) or down, radians. */
+  pitch: z.number().min(-1.5).max(1.5).default(0),
+  /** Distance multiplier (mouse wheel): below 1 is closer. */
+  zoom: z.number().min(0.1).max(8).default(1),
+  /** Where the point looked at has moved, in world space, in units of the visible height at the base distance (right drag). */
+  pan: z
+    .tuple([z.number().min(-4).max(4), z.number().min(-4).max(4), z.number().min(-4).max(4)])
+    .default([0, 0, 0]),
+})
+export type CameraAdjust = z.infer<typeof CameraAdjust>
+export const NO_CAMERA_ADJUST: CameraAdjust = { yaw: 0, pitch: 0, zoom: 1, pan: [0, 0, 0] }
+
 export const CameraConfig = z.object({
   fov: z.number().min(5).max(90).default(20),
   position: Vec3.default([0, 1.3, 1.5]),
@@ -55,6 +75,10 @@ export const CameraConfig = z.object({
    * Anything but `none` takes over `position`, `target` and `follow_head` once the model is up.
    */
   fit: CameraFit.default('none'),
+  /** What mouse gestures on the stage window have changed; the stage reports it (`camera.adjusted`) and the orchestrator keeps it. */
+  adjust: CameraAdjust.default(NO_CAMERA_ADJUST),
+  /** The stage ignores the mouse (a locked composition, so nothing moves by accident during a broadcast). */
+  locked: z.boolean().default(false),
 })
 export type CameraConfig = z.infer<typeof CameraConfig>
 
@@ -94,6 +118,8 @@ export const SceneSet = z.object({
     target: [0, 1.3, 0],
     follow_head: true,
     fit: 'none',
+    adjust: NO_CAMERA_ADJUST,
+    locked: false,
   }),
 })
 
@@ -135,9 +161,14 @@ export const TuningSet = z.object({
 export const OverlayId = z.enum(['credit', 'lyrics', 'subtitle', 'frame', 'notice'])
 export type OverlayId = z.infer<typeof OverlayId>
 
+/** How the spoken subtitle looks: a rounded translucent bubble, or bare text with a shadow. */
+export const SubtitleVariant = z.enum(['bubble', 'plain'])
+export type SubtitleVariant = z.infer<typeof SubtitleVariant>
+
 /**
- * Overlay snapshot. `lyrics` and the sleep captions are driven by the stage from the audio clock,
- * so for those overlays this message only toggles visibility and style.
+ * Overlay snapshot. `lyrics`, the spoken subtitle (`utterance.begin.subtitle`) and the sleep captions are
+ * driven by the stage from the audio clock, so for those overlays this message only toggles visibility and
+ * style. For `subtitle`, `text` is a name badge shown above the words (leave it out for none).
  */
 export const OverlaySet = z.object({
   type: z.literal('overlay.set'),
@@ -146,6 +177,8 @@ export const OverlaySet = z.object({
   text: StageText.optional(),
   image: AssetUrl.optional(),
   rect: Rect.optional(),
+  /** `subtitle` only. */
+  variant: SubtitleVariant.optional(),
 })
 
 export const UtteranceBegin = z.object({
@@ -405,6 +438,12 @@ export const DebugReply = z.object({
 
 export const Pong = z.object({ type: z.literal('pong'), t: z.number() })
 
+/**
+ * The operator moved the camera with the mouse on the stage window (a gesture ended). A report, not a
+ * command: the orchestrator decides whether to keep it, stores it and echoes it back in `scene.set`.
+ */
+export const CameraAdjusted = z.object({ type: z.literal('camera.adjusted'), adjust: CameraAdjust })
+
 export const StageUpstream = z.discriminatedUnion('type', [
   Hello,
   ModelState,
@@ -418,6 +457,7 @@ export const StageUpstream = z.discriminatedUnion('type', [
   StageError,
   DebugReply,
   Pong,
+  CameraAdjusted,
 ])
 export type StageUpstream = z.infer<typeof StageUpstream>
 
@@ -456,6 +496,7 @@ export type Stats = z.infer<typeof Stats>
 export type StageError = z.infer<typeof StageError>
 export type DebugReply = z.infer<typeof DebugReply>
 export type Pong = z.infer<typeof Pong>
+export type CameraAdjusted = z.infer<typeof CameraAdjusted>
 
 // ───────────────────────────────── helpers ─────────────────────────────────
 

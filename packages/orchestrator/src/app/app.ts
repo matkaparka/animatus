@@ -11,10 +11,10 @@
  * line); none of them stops the program.
  */
 import type { ChildProcess } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Emotion, RunEvent, SayRequest, InjectRequest, StatusView } from '@animatus/protocol'
-import { trustFor } from '@animatus/protocol'
+import { CameraAdjust, NO_CAMERA_ADJUST, trustFor } from '@animatus/protocol'
 import { Brain } from '../brain/brain.ts'
 import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
@@ -406,6 +406,7 @@ export class App {
       else if (m.status === 'ready') this.alarms.clear('model_load_failed')
     })
     onHub('error', (err) => this.logger('error', `stage hub: ${err.message}`))
+    onHub('camera.adjusted', (m) => this.setCameraAdjust(m.adjust))
 
     // speech
     this.director.on('started', (_id, t) => this.traces.update(t))
@@ -773,8 +774,75 @@ export class App {
       layout: { char: s.layout.char, frame: s.layout.frame },
       background: s.background,
       lighting: s.lighting,
-      camera: s.camera,
+      camera: { ...s.camera, adjust: this.cameraAdjust ?? s.camera.adjust },
     }
+  }
+
+  // ───────────────────────────── the operator's mouse on the stage ─────────────────────────────
+
+  private cameraAdjust: CameraAdjust | null = null
+  private stateTimer: NodeJS.Timeout | null = null
+
+  private get stateFile(): string {
+    return path.join(this.config.paths.data_dir, 'stage-state.json')
+  }
+
+  /** What the operator did with the mouse survives a restart: it is read back here and sent in every scene snapshot. */
+  private async loadStageState(): Promise<void> {
+    try {
+      const raw = JSON.parse(await readFile(this.stateFile, 'utf8')) as { camera_adjust?: unknown }
+      const parsed = CameraAdjust.safeParse(raw.camera_adjust)
+      if (parsed.success) this.cameraAdjust = parsed.data
+      else if (raw.camera_adjust !== undefined)
+        this.logger(
+          'warn',
+          'stage-state.json holds a camera adjustment that is not valid; ignoring it'
+        )
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.logger('warn', `stage-state.json could not be read: ${firstLine(e)}`)
+      }
+    }
+  }
+
+  private saveStageState(): void {
+    if (this.stateTimer) clearTimeout(this.stateTimer)
+    this.stateTimer = setTimeout(() => void this.flushStageState(), 300)
+    this.stateTimer.unref?.()
+  }
+
+  private async flushStageState(): Promise<void> {
+    if (this.stateTimer) clearTimeout(this.stateTimer)
+    this.stateTimer = null
+    try {
+      await mkdir(this.config.paths.data_dir, { recursive: true })
+      const tmp = `${this.stateFile}.tmp`
+      await writeFile(
+        tmp,
+        JSON.stringify({ camera_adjust: this.cameraAdjust ?? NO_CAMERA_ADJUST }, null, 2),
+        'utf8'
+      )
+      await rename(tmp, this.stateFile)
+    } catch (e) {
+      this.logger('warn', `stage-state.json could not be written: ${firstLine(e)}`)
+    }
+  }
+
+  /** The stage reported that the operator moved the camera (or, from the console, the framing is reset). */
+  setCameraAdjust(adjust: CameraAdjust): void {
+    this.cameraAdjust = adjust
+    const deg = (r: number) => Math.round((r * 180) / Math.PI)
+    this.runLog.add(
+      'stage',
+      `camera moved by hand: turn ${deg(adjust.yaw)}°/${deg(adjust.pitch)}°, zoom x${adjust.zoom.toFixed(2)}`
+    )
+    this.stage.hub.setScene(this.sceneMessage())
+    this.saveStageState()
+  }
+
+  /** Back to the framing the configuration gives. */
+  resetCamera(): void {
+    this.setCameraAdjust(NO_CAMERA_ADJUST)
   }
 
   async start(): Promise<void> {
@@ -783,8 +851,17 @@ export class App {
     this.logger('info', `animatus starting (stage :${this.config.servers.stage_port})`)
     await this.stage.start()
     const hub = this.stage.hub
+    await this.loadStageState()
     hub.setScene(this.sceneMessage())
     hub.setLook({ type: 'look.set' })
+    const sub = this.config.stage.subtitle
+    hub.setOverlay({
+      type: 'overlay.set',
+      id: 'subtitle',
+      visible: sub.enabled,
+      variant: sub.style,
+      ...(sub.name ? { text: sub.name } : {}),
+    })
     if (this.motions) {
       try {
         const scan = await this.motions.refresh(true)
@@ -889,6 +966,7 @@ export class App {
     this.brain.cancelActive('shutdown')
     this.director.dispose()
     for (const d of this.disposers.splice(0)) d()
+    if (this.stateTimer) await this.flushStageState()
     await this.source?.stop().catch(() => undefined)
     await this.supervisor
       .stopAll()
@@ -910,6 +988,10 @@ export class App {
     }
   }
 }
+
+/** First line of an error's message, for log lines that must stay one line. */
+const firstLine = (e: unknown): string =>
+  (e instanceof Error ? e.message : String(e)).split(/\r?\n/, 1)[0] ?? ''
 
 /** The secret store the operator's keys live in: Windows DPAPI first (writable), then config/.env, then the environment. */
 export function createSecretStore(

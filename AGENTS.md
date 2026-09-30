@@ -49,7 +49,9 @@ parameter properties, no `namespace`; use `import type` and explicit `.ts` impor
    environment variables, and only the ones a plugin's manifest lists. The stage and the console
    frontend never see a secret. Never put a secret in a `NEXT_PUBLIC_`-style browser-visible variable.
 3. **The stage is empty and stateless.** It renders, plays audio, plays motion and reports playback.
-   No settings UI, no hotkeys, no local input, no decisions. Its WebSocket is a closed set of
+   No settings UI, no hotkeys, no decisions. The one local input it takes is the operator's mouse on
+   the canvas (drag, wheel, double click) to frame the camera, and even that is only *reported*
+   (`camera.adjusted`): the orchestrator keeps it and echoes it back. Its WebSocket is a closed set of
    reports upstream; it can never send commands. Text shown on the stage is rendered with
    `textContent`, never as HTML.
 4. **Viewer text is untrusted input.** It carries `trust: 'untrusted'` and may only trigger `free`

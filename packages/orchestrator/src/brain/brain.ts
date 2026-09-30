@@ -319,7 +319,14 @@ export class Brain extends EventEmitter<BrainEvents> {
       motion = this.o.resolveMotion?.(request.tag) ?? null
       if (!motion) this.safeEmit('motion.unknown', { turnId: turn.id, tag: request.tag })
     }
-    const item: SpeechItem = { text: ev.text, emotion, motion, style: emotion }
+    // The subtitle is the sentence as written (tags already taken out by the segmenter), shown while it is spoken.
+    const item: SpeechItem = {
+      text: ev.text,
+      emotion,
+      motion,
+      style: emotion,
+      subtitle: ev.text.trim().slice(0, 400),
+    }
     if (!director.enqueue(item)) return
     summary.sentences++
     if (summary.firstSentenceMs === null) summary.firstSentenceMs = this.now() - startedAt

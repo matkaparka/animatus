@@ -13,13 +13,12 @@
         background: transparent;
         user-select: none;
         -webkit-user-select: none;
-        cursor: none;
-        pointer-events: none;
       }
       #backdrop {
         position: fixed;
         inset: 0;
         z-index: 0;
+        pointer-events: none;
       }
       .backdrop,
       .backdrop-night {
@@ -33,14 +32,19 @@
         height: 100vh;
         z-index: 1;
         display: block;
+        /* The one element that takes the mouse: drag, wheel and double click move the camera (see src/input.ts). */
+        pointer-events: auto;
+        touch-action: none;
       }
       #overlays {
         position: fixed;
         inset: 0;
         z-index: 2;
+        pointer-events: none;
       }
       .ov {
         position: absolute;
+        pointer-events: none;
         color: #fff;
         font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
         text-shadow:
@@ -63,12 +67,51 @@
         font-size: max(20px, 2.6vw);
         font-weight: 700;
       }
+      /* The spoken subtitle: what is being said, in a rounded translucent bubble like the legacy text box. */
       .ov-subtitle {
-        left: 10vw;
-        right: 10vw;
-        bottom: 3vh;
+        left: 50%;
+        bottom: 5vh;
+        transform: translateX(-50%);
+        box-sizing: border-box;
+        width: max-content;
+        max-width: min(74vw, 1100px);
+        padding: 0.7em 1.3em 0.8em;
+        border-radius: 1.2em;
+        background: rgba(18, 20, 32, 0.62);
+        backdrop-filter: blur(8px);
+        text-align: left;
+        font-size: clamp(18px, 1.9vw, 34px);
+        font-weight: 500;
+        line-height: 1.65;
+        text-shadow: none;
+      }
+      .ov-subtitle .ov-name {
+        display: inline-block;
+        margin-bottom: 0.35em;
+        padding: 0.05em 0.7em;
+        border-radius: 999px;
+        background: rgba(120, 90, 255, 0.9);
+        font-size: 0.62em;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+      .ov-subtitle .ov-words {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        overflow: hidden;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      /* Bare words with a shadow, for a scene that has its own dark strip. */
+      .ov-subtitle[data-variant='plain'] {
+        background: none;
+        backdrop-filter: none;
         text-align: center;
-        font-size: max(16px, 2vw);
+        font-weight: 600;
+        text-shadow:
+          0 0 4px #000,
+          0 0 10px #000;
       }
       .ov-notice {
         top: 2vh;

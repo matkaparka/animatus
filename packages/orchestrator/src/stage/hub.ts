@@ -86,6 +86,8 @@ export type StageHubEvents = {
   stats: [msg: Report<'stats'>]
   'model.state': [msg: Report<'model.state'>]
   'audio.state': [msg: Report<'audio.state'>]
+  /** The operator moved the camera with the mouse and let go. */
+  'camera.adjusted': [msg: Report<'camera.adjusted'>]
   'debug.reply': [msg: Report<'debug.reply'>]
   /** The stage reported an `error` frame (not to be confused with the hub's own 'error' event). */
   'stage.error': [msg: Report<'error'>]
@@ -797,6 +799,9 @@ export class StageHub extends EventEmitter<StageHubEvents> {
         break
       case 'debug.reply':
         this.safeEmit('debug.reply', msg)
+        break
+      case 'camera.adjusted':
+        this.safeEmit('camera.adjusted', msg)
         break
       case 'error':
         this.safeEmit('stage.error', msg)

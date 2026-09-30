@@ -12,7 +12,15 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import YAML from 'yaml'
 import { z } from 'zod'
-import { Background, CameraConfig, CharLayout, Id, PluginId, Rect } from '@animatus/protocol'
+import {
+  Background,
+  CameraConfig,
+  CharLayout,
+  Id,
+  PluginId,
+  Rect,
+  SubtitleVariant,
+} from '@animatus/protocol'
 import { InboxConfigSchema } from './inbox/types.ts'
 import type { InboxConfig } from './inbox/types.ts'
 import type { LlmProviderConfig } from './llm/index.ts'
@@ -118,6 +126,15 @@ const Stage = z.strictObject({
   background: Background.default({ kind: 'none' }),
   lighting: z.strictObject({ intensity: z.number().min(0).max(4).default(1) }).prefault({}),
   camera: CameraConfig.prefault({ fit: 'upper_body' }),
+  /** The words of what is being said, shown on the stage while each sentence is spoken. */
+  subtitle: z
+    .strictObject({
+      enabled: z.boolean().default(true),
+      /** A name badge above the words; leave out for none. */
+      name: z.string().min(1).max(40).nullable().default(null),
+      style: SubtitleVariant.default('bubble'),
+    })
+    .prefault({}),
   layout: z
     .strictObject({
       char: CharLayout.prefault({ x: 0, y: 0, scale: 1 }),
