@@ -1,0 +1,23 @@
+{
+  "name": "@animatus/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The brain: event bus, LLM gateway, speech scheduling, mode manager, plugin supervisor, stage and console servers.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "tsx src/main.ts",
+    "replay": "tsx src/dev/replay.ts"
+  },
+  "dependencies": {
+    "@animatus/protocol": "*",
+    "blive-message-listener": "^0.5.5",
+    "undici": "^8.11.2",
+    "ws": "^8.22.0",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.0"
+  }
+}
