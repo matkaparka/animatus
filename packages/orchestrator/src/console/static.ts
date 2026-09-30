@@ -130,12 +130,13 @@ function etagMatches(header: string, etag: string): boolean {
 async function serveFile(
   req: IncomingMessage,
   res: ServerResponse,
-  resolved: ResolvedFile
+  resolved: ResolvedFile,
+  assetOrigin?: string
 ): Promise<void> {
   const { file, stats } = resolved
   const etag = `"${stats.size.toString(16)}-${Math.trunc(stats.mtimeMs).toString(16)}"`
   const base: Record<string, string | number> = {
-    ...baseSecurityHeaders(),
+    ...baseSecurityHeaders(assetOrigin),
     // The page must always be revalidated; the ETag makes that a 304 in the common case.
     'Cache-Control': 'no-cache',
     ETag: etag,
@@ -174,7 +175,7 @@ export type StaticHandler = (
  * `dir` is the console build. Without it, or before the build exists, pages answer 503 with a hint; a build
  * that appears later is picked up without a restart. `pathname` is the raw request path, no query.
  */
-export function createStaticHandler(dir: string | undefined): StaticHandler {
+export function createStaticHandler(dir: string | undefined, assetOrigin?: string): StaticHandler {
   return async function handleStatic(req, res, pathname) {
     const head = req.method === 'HEAD'
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -202,7 +203,7 @@ export function createStaticHandler(dir: string | undefined): StaticHandler {
     }
     if (segments.length > 0) {
       const hit = await resolveInsideRoot(root, segments)
-      if (hit) return serveFile(req, res, hit)
+      if (hit) return serveFile(req, res, hit, assetOrigin)
       // Paths that look like files are real 404s; only route-like paths fall back to the app shell.
       if (path.extname(segments[segments.length - 1] ?? '') !== '') return notFound()
     }
@@ -211,6 +212,6 @@ export function createStaticHandler(dir: string | undefined): StaticHandler {
       return notBuilt(
         'The console build has no index.html.\nRebuild it with: npm run build -w @animatus/console\n'
       )
-    return serveFile(req, res, index)
+    return serveFile(req, res, index, assetOrigin)
   }
 }

@@ -75,6 +75,8 @@ export interface ConsoleServerOptions {
   backend: ConsoleBackend
   /** Extra allowed origins, e.g. a Vite dev server: `http://127.0.0.1:5174`. Validated at construction. */
   extraOrigins?: string[]
+  /** The stage server (`http://127.0.0.1:5810`): the one other origin the page may load pictures from. */
+  assetOrigin?: string
   logger?: ConsoleLogger
   /** Clock of the failure limiter. Default `Date.now`. */
   now?: () => number
@@ -180,7 +182,7 @@ export function createConsoleServer(opts: ConsoleServerOptions): ConsoleServer {
   const maxClients = opts.maxClients ?? 16
   const verifyToken = createTokenVerifier(token)
   const limiter = new FailureLimiter({ now: opts.now })
-  const handleStatic = createStaticHandler(opts.staticDir)
+  const handleStatic = createStaticHandler(opts.staticDir, opts.assetOrigin)
   let boundPort = opts.port
   let origins = allowedOrigins(boundPort, extraOrigins)
 

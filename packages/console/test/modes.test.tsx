@@ -233,3 +233,195 @@ describe('entering and leaving', () => {
     expect(api.modes).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('what a mode shows and offers by itself', () => {
+  const PANEL = {
+    status: 'dancing "Aipao"',
+    facts: [{ label: 'Cooldown', value: '180 s after each dance' }],
+    actions: [
+      { id: 'stop', label: 'Stop the dance', inputs: [], confirm: 'Stop it?' },
+      {
+        id: 'tune',
+        label: 'Tune',
+        inputs: [
+          {
+            name: 'offset',
+            label: 'Motion offset (s)',
+            kind: 'number' as const,
+            min: -30,
+            max: 30,
+            step: 0.05,
+            value: 1,
+          },
+          { name: 'speed', label: 'Speed', kind: 'number' as const, value: 1.2 },
+        ],
+      },
+    ],
+    sections: [
+      {
+        title: 'Dances',
+        empty: 'No dance folders.',
+        rows: [
+          {
+            id: 'aipao',
+            text: 'Aipao',
+            detail: '141 BPM',
+            active: true,
+            actions: [
+              { id: 'play', label: 'Play', inputs: [], disabled: 'a dance is already running' },
+              { id: 'trial', label: 'Trial run', inputs: [] },
+            ],
+          },
+          {
+            id: 'otagei',
+            text: 'Otagei',
+            active: false,
+            actions: [{ id: 'play', label: 'Play', inputs: [] }],
+          },
+        ],
+      },
+    ],
+  }
+  const withPanel = (panel: unknown = PANEL) => [
+    mode({ id: 'dance', title: 'Dance', state: 'ACTIVE', admission: verdict(true), panel }),
+  ]
+
+  it('draws the status, the facts, the buttons and the rows, and marks the row that is current', () => {
+    renderModes({ modes: withPanel() })
+    const dance = card('Dance')
+    expect(dance.getByText('dancing "Aipao"')).toBeTruthy()
+    expect(dance.getByText('180 s after each dance')).toBeTruthy()
+    expect(dance.getByRole('button', { name: 'Stop the dance' })).toBeTruthy()
+    expect(dance.getByText('Aipao').closest('li')?.className).toContain('panel-row-active')
+    expect(dance.getByText('now')).toBeTruthy()
+    expect(dance.getByText('141 BPM')).toBeTruthy()
+  })
+
+  it('a button that is off says why, as its tooltip and as visible text, and does nothing when clicked', () => {
+    const { api } = renderModes({ modes: withPanel() })
+    const play = card('Dance').getAllByRole('button', { name: 'Play' })[0] as HTMLButtonElement
+    expect(play.disabled).toBe(true)
+    expect(play.title).toBe('a dance is already running')
+    expect(card('Dance').getByText('a dance is already running')).toBeTruthy()
+    fireEvent.click(play)
+    expect(api.modeAction).not.toHaveBeenCalled()
+  })
+
+  it('a row button sends the action, the row and nothing else', async () => {
+    const { api, onChange } = renderModes({ modes: withPanel() })
+    fireEvent.click(card('Dance').getByRole('button', { name: 'Trial run' }))
+    await waitFor(() => expect(api.modeAction).toHaveBeenCalled())
+    expect(api.modeAction).toHaveBeenCalledWith('dance', 'act', {
+      replace: false,
+      force: false,
+      params: { action: 'trial', row: 'aipao' },
+    })
+    await waitFor(() => expect(onChange).toHaveBeenCalled())
+  })
+
+  it('a button with inputs sends what the fields hold, numbers as numbers', async () => {
+    const { api } = renderModes({ modes: withPanel() })
+    const dance = card('Dance')
+    fireEvent.change(dance.getByLabelText('Motion offset (s)'), { target: { value: '2.5' } })
+    fireEvent.change(dance.getByLabelText('Speed'), { target: { value: '0.9' } })
+    fireEvent.click(dance.getByRole('button', { name: 'Tune' }))
+    await waitFor(() => expect(api.modeAction).toHaveBeenCalled())
+    expect(api.modeAction).toHaveBeenCalledWith('dance', 'act', {
+      replace: false,
+      force: false,
+      params: { action: 'tune', offset: 2.5, speed: 0.9 },
+    })
+  })
+
+  it('asks before something that says it must be confirmed, and does nothing on no', async () => {
+    const { api } = renderModes({ modes: withPanel() })
+    // happy-dom has no window.confirm
+    const ask = vi.fn().mockReturnValue(false)
+    const had = Object.getOwnPropertyDescriptor(window, 'confirm')
+    Object.defineProperty(window, 'confirm', { value: ask, configurable: true, writable: true })
+    fireEvent.click(card('Dance').getByRole('button', { name: 'Stop the dance' }))
+    expect(ask).toHaveBeenCalledWith('Stop it?')
+    expect(api.modeAction).not.toHaveBeenCalled()
+    ask.mockReturnValue(true)
+    fireEvent.click(card('Dance').getByRole('button', { name: 'Stop the dance' }))
+    await waitFor(() => expect(api.modeAction).toHaveBeenCalled())
+    expect(api.modeAction).toHaveBeenCalledWith('dance', 'act', {
+      replace: false,
+      force: false,
+      params: { action: 'stop' },
+    })
+    if (had) Object.defineProperty(window, 'confirm', had)
+    else Reflect.deleteProperty(window, 'confirm')
+  })
+
+  it('a refusal from the mode is shown, and an empty list says what it is waiting for', async () => {
+    const api = fakeApi({
+      modeAction: vi.fn(async () => {
+        throw new ApiClientError('refused', 'no dance is running', 409)
+      }),
+    })
+    renderModes({
+      api,
+      modes: withPanel({
+        ...PANEL,
+        sections: [{ title: 'Dances', empty: 'No dance folders.', rows: [] }],
+      }),
+    })
+    expect(card('Dance').getByText('No dance folders.')).toBeTruthy()
+    fireEvent.click(card('Dance').getByRole('button', { name: 'Tune' }))
+    expect(await screen.findByText(/no dance is running/)).toBeTruthy()
+  })
+
+  it('selects, toggles and text fields send their values; a picture is fetched from the stage server', async () => {
+    const api = fakeApi()
+    render(
+      <Modes
+        api={api}
+        modes={withPanel({
+          image: '/asset/generated/a%20b.png',
+          actions: [
+            {
+              id: 'pick',
+              label: 'Apply',
+              inputs: [
+                {
+                  name: 'window',
+                  label: 'Window',
+                  kind: 'select',
+                  options: [
+                    { value: 'w1', label: 'Game' },
+                    { value: 'w2', label: 'Chat' },
+                  ],
+                  value: 'w1',
+                },
+                { name: 'pause', label: 'Pause', kind: 'toggle', value: false },
+                { name: 'note', label: 'Note', kind: 'text', value: '' },
+              ],
+            },
+          ],
+        })}
+        onChange={vi.fn()}
+        onRefresh={vi.fn()}
+        assetBase="http://127.0.0.1:5810"
+      />
+    )
+    const dance = card('Dance')
+    const img = dance.getByRole('img', { name: /shows now/ }) as HTMLImageElement
+    expect(img.src).toBe('http://127.0.0.1:5810/asset/generated/a%20b.png')
+    fireEvent.change(dance.getByLabelText('Window'), { target: { value: 'w2' } })
+    fireEvent.click(dance.getByLabelText('Pause'))
+    fireEvent.change(dance.getByLabelText('Note'), { target: { value: 'hi' } })
+    fireEvent.click(dance.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => expect(api.modeAction).toHaveBeenCalled())
+    expect(api.modeAction).toHaveBeenCalledWith('dance', 'act', {
+      replace: false,
+      force: false,
+      params: { action: 'pick', window: 'w2', pause: true, note: 'hi' },
+    })
+  })
+
+  it('a mode with no panel shows none', () => {
+    renderModes({ modes: [mode({ id: 'x', title: 'Plain', admission: verdict(true) })] })
+    expect(card('Plain').queryByLabelText('Mode details')).toBeNull()
+  })
+})

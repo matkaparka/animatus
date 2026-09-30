@@ -759,3 +759,105 @@ button:disabled {
     align-items: flex-start;
   }
 }
+
+/* What a mode shows and offers by itself (ModePanel): status, facts, a picture, buttons and lists. */
+.mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.panel-status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.panel-image {
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  align-self: flex-start;
+}
+
+.panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 10px;
+}
+
+.panel-inputs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.panel-action .field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.panel-action .field label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.panel-action .field input,
+.panel-action .field select {
+  min-width: 6rem;
+  max-width: 16rem;
+}
+
+.panel-section h4 {
+  margin: 4px 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.panel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--card-2);
+}
+
+.panel-row-active {
+  outline: 2px solid var(--ok);
+}
+
+.panel-row-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.panel-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

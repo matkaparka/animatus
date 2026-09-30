@@ -1316,6 +1316,7 @@ export class App {
         staticDir:
           this.options.consoleDir ?? path.join(this.config.root, 'packages', 'console', 'dist'),
         backend,
+        assetOrigin: `http://127.0.0.1:${this.config.servers.stage_port}`,
         logger: this.logger,
       })
       await server.start()

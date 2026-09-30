@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { CONSOLE_CSP } from '../../src/console/policy.ts'
+import { CONSOLE_CSP, consoleCsp, isAssetOrigin } from '../../src/console/policy.ts'
 import { decodeStaticSegments, isSafeSegment, staticContentType } from '../../src/console/static.ts'
 import { INDEX_HTML, createCleanup, rawRequest, rawSocket, startConsole } from './support.ts'
 
@@ -104,6 +104,32 @@ describe('the console build', () => {
       expect(res.headers.etag).toBeTruthy()
     }
     expect(CONSOLE_CSP).toBe(EXPECTED_CSP)
+  })
+
+  it('pictures a mode shows may come from the stage server on this machine, and from nowhere else', async () => {
+    const run = await start({ assetOrigin: 'http://127.0.0.1:5810' })
+    const res = await rawRequest(run.port, '/')
+    const csp = res.headers['content-security-policy'] as string
+    expect(csp).toContain("img-src 'self' data: http://127.0.0.1:5810;")
+    expect(csp).toBe(consoleCsp('http://127.0.0.1:5810'))
+    // everything else is the plain policy
+    expect(csp.replace(' http://127.0.0.1:5810', '')).toBe(EXPECTED_CSP)
+    expect(consoleCsp()).toBe(EXPECTED_CSP)
+    for (const ok of ['http://127.0.0.1:5810', 'http://localhost:80', 'http://localhost:65535'])
+      expect(isAssetOrigin(ok), ok).toBe(true)
+    for (const bad of [
+      'https://127.0.0.1:5810',
+      'http://evil.example:5810',
+      'http://127.0.0.1',
+      'http://127.0.0.1:5810/',
+      'http://127.0.0.1:5810 http://evil.example',
+      'http://127.0.0.1:5810; script-src *',
+      '*',
+      '',
+    ]) {
+      expect(isAssetOrigin(bad), bad).toBe(false)
+      expect(() => consoleCsp(bad), bad).toThrow('not a local asset origin')
+    }
   })
 
   it('the policy leaves no way to load or run anything from elsewhere', () => {

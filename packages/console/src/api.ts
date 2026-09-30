@@ -172,6 +172,8 @@ export function createApi(options: ApiOptions): Api {
       json(ModeView, 'POST', `/api/modes/${enc(id)}/${action}`, {
         replace: request.replace ?? false,
         force: request.force ?? false,
+        // what the mode's own panel sent (which action, which row, the inputs)
+        ...(request.params ? { params: request.params } : {}),
       }),
     async secrets() {
       return (await json(SecretsResponse, 'GET', '/api/secrets')).secrets

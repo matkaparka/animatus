@@ -3,6 +3,7 @@ import type { ModeView, VerdictView } from '@animatus/protocol'
 import type { Api } from './api.ts'
 import { Notice, Pill, messageOf, modeTone, useAction } from './components.tsx'
 import { formatAgo } from './format.ts'
+import { ModePanelView } from './ModePanel.tsx'
 
 export interface ModesProps {
   api: Api
@@ -11,6 +12,8 @@ export interface ModesProps {
   onChange(mode: ModeView): void
   /** Called with a fresh list. */
   onRefresh(modes: ModeView[]): void
+  /** The stage server, where the pictures a mode shows are fetched from. */
+  assetBase?: string
 }
 
 /** Why a verdict says no, as one sentence. Always something, even when the list of reasons is empty. */
@@ -50,15 +53,19 @@ function ModeCard({
   titles,
   replace,
   busy,
+  assetBase,
   onEnter,
   onExit,
+  onAct,
 }: {
   mode: ModeView
   titles: Record<string, string>
   replace: boolean
   busy: boolean
+  assetBase?: string
   onEnter(): void
   onExit(): void
+  onAct(params: Record<string, string | number | boolean>): void
 }) {
   const blocked = mode.admission !== undefined && !mode.admission.ok
   const reason = blocked && mode.admission ? verdictReason(mode.admission) : undefined
@@ -131,11 +138,19 @@ function ModeCard({
           </button>
         )}
       </div>
+      {mode.panel ? (
+        <ModePanelView
+          panel={mode.panel}
+          busy={busy}
+          {...(assetBase ? { assetBase } : {})}
+          onAct={onAct}
+        />
+      ) : null}
     </article>
   )
 }
 
-export function Modes({ api, modes, onChange, onRefresh }: ModesProps) {
+export function Modes({ api, modes, onChange, onRefresh, assetBase }: ModesProps) {
   const replaceId = useId()
   const [replace, setReplace] = useState(false)
   const [working, setWorking] = useState<string | null>(null)
@@ -148,6 +163,19 @@ export function Modes({ api, modes, onChange, onRefresh }: ModesProps) {
     setWorking(mode.id)
     try {
       onChange(await api.modeAction(mode.id, action, { replace, force: false }))
+    } catch (err) {
+      setError(`${mode.title}: ${messageOf(err)}`)
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  /** A button of the mode's own panel: what it says (which action, which row, which inputs) is the mode's business. */
+  async function actPanel(mode: ModeView, params: Record<string, string | number | boolean>) {
+    setError(null)
+    setWorking(mode.id)
+    try {
+      onChange(await api.modeAction(mode.id, 'act', { replace: false, force: false, params }))
     } catch (err) {
       setError(`${mode.title}: ${messageOf(err)}`)
     } finally {
@@ -189,8 +217,10 @@ export function Modes({ api, modes, onChange, onRefresh }: ModesProps) {
             titles={titles}
             replace={replace}
             busy={working !== null}
+            {...(assetBase ? { assetBase } : {})}
             onEnter={() => void act(mode, 'enter')}
             onExit={() => void act(mode, 'exit')}
+            onAct={(params) => void actPanel(mode, params)}
           />
         ))}
       </div>

@@ -98,7 +98,9 @@ The server binds to `127.0.0.1` only and refuses any other `host` option.
   ws://localhost:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri
   'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
   `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin`, `Cross-Origin-Opener-Policy:
-  same-origin`. API answers also carry `Cache-Control: no-store`.
+  same-origin`. API answers also carry `Cache-Control: no-store`. The page itself is served with one addition:
+  `img-src` also lists the stage server (`http://127.0.0.1:<stage port>`), the only other origin, so that a picture a
+  mode shows (the last drawing, an asset URL of the stage server) can be displayed.
 - Static files: each path segment is decoded once and checked (no `..`, hidden names, backslashes, NUL,
   drive letters, alternate streams, device names), the real path must still be inside the build folder
   (symlinks and junctions that leave it fail), only regular files are served, and only paths without a file
@@ -188,7 +190,7 @@ usable at phone width. Everything is rendered as text nodes; there is no `danger
 |---|---|
 | Run | Status cards (stage, audio and AudioContext counts, frame rate, underruns, T-pose frames, speech, GPU memory, language models), alarms, the live event stream (audience lines carry an "untrusted" badge), the speech trace table, a form to make the character say a line, a button to stop speech, and a form to inject a fake audience event |
 | Plugins | Status, pid, restarts, health, GPU memory estimate against measurement ("not measured" for a missing figure), start / stop / restart, a logs drawer |
-| Modes | One card per mode: state, priority, exclusions, services, the admission verdict, pairs that do not fit. Enter is disabled, with the reason as its tooltip and as visible text, when the verdict is no; an option replaces conflicting modes |
+| Modes | One card per mode: state, priority, exclusions, services, the admission verdict, pairs that do not fit. Enter is disabled, with the reason as its tooltip and as visible text, when the verdict is no; an option replaces conflicting modes. Below that, the mode's own panel when it has one (`ModeView.panel`, drawn from data: a status line, facts, a picture, buttons with inputs, lists whose rows have buttons; the dance mode lists its dances with play and trial buttons, tuning fields and a stop button). A button sends `POST /api/modes/:id/act` with `params.action` set to its id, `params.row` for a row button, and one param per input; the panel is refreshed with every status push |
 | Settings | Read-only, collapsible view of `/api/config`. Editing comes later |
 | Keys | Names, set or not, where stored; a password field to set one; delete. Values are write-only |
 

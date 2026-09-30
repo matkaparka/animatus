@@ -51,6 +51,7 @@ export class AppBackend implements ConsoleBackend {
     const hub = app.stage.hub.state
     const stage: StageView = {
       connected: hub.connected,
+      url: app.stage.url,
       ...(hub.model
         ? {
             model: {

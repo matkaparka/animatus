@@ -151,6 +151,24 @@ describe('requests', () => {
   })
 })
 
+describe('the details of a mode action', () => {
+  it('what a mode panel sends (action, row, inputs) reaches the server, and is left out when there is none', async () => {
+    const f = fakeFetch(json(mode()), json(mode()))
+    const api = createApi({ token: TOKEN, fetch: f.fetch })
+    await api.modeAction('dance', 'act', {
+      params: { action: 'tune', row: 'aipao', offset: 2.5, trial: true },
+    })
+    await api.modeAction('dance', 'enter')
+    expect(f.calls[0]?.url).toBe('/api/modes/dance/act')
+    expect(JSON.parse(f.calls[0]?.init.body as string)).toEqual({
+      replace: false,
+      force: false,
+      params: { action: 'tune', row: 'aipao', offset: 2.5, trial: true },
+    })
+    expect(JSON.parse(f.calls[1]?.init.body as string)).toEqual({ replace: false, force: false })
+  })
+})
+
 describe('answers are checked against the protocol', () => {
   it('returns the parsed value, with the schema defaults applied', async () => {
     const f = fakeFetch(

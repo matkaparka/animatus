@@ -215,6 +215,7 @@ function Console({
         modes={state.status?.modes ?? []}
         onChange={(mode) => dispatch({ type: 'mode', mode })}
         onRefresh={(modes) => dispatch({ type: 'modes', modes })}
+        {...(state.status?.stage.url ? { assetBase: state.status.stage.url } : {})}
       />
     ),
     settings: <Settings api={api} />,

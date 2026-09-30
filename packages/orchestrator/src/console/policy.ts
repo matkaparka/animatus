@@ -3,15 +3,35 @@
  * response carries. Pure functions, no I/O.
  */
 
-/** Sent with every response. The console loads only its own scripts and styles and talks only to itself. */
-export const CONSOLE_CSP =
-  "default-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; " +
-  "style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+/** The only other origin the console may load pictures from: the stage server on this machine. */
+const ASSET_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d{1,5}$/
+
+export function isAssetOrigin(origin: string): boolean {
+  return ASSET_ORIGIN.test(origin)
+}
+
+/**
+ * The console loads only its own scripts and styles and talks only to itself. Pictures a mode shows (the last
+ * drawing) come from the stage server's asset route, so that one origin, and nothing else, is allowed for images.
+ */
+export function consoleCsp(assetOrigin?: string): string {
+  if (assetOrigin !== undefined && !isAssetOrigin(assetOrigin))
+    throw new Error(`not a local asset origin: ${JSON.stringify(assetOrigin)}`)
+  const images = assetOrigin === undefined ? '' : ` ${assetOrigin}`
+  return (
+    "default-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; " +
+    `img-src 'self' data:${images}; ` +
+    "style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  )
+}
+
+/** Sent with every response. */
+export const CONSOLE_CSP = consoleCsp()
 
 /** Headers on every response, static files and API alike. Never any CORS header. */
-export function baseSecurityHeaders(): Record<string, string> {
+export function baseSecurityHeaders(assetOrigin?: string): Record<string, string> {
   return {
-    'Content-Security-Policy': CONSOLE_CSP,
+    'Content-Security-Policy': assetOrigin === undefined ? CONSOLE_CSP : consoleCsp(assetOrigin),
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'X-Frame-Options': 'DENY',

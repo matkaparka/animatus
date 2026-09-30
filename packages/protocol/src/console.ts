@@ -170,6 +170,8 @@ export type ModeView = z.infer<typeof ModeView>
 
 export const StageView = z.object({
   connected: z.boolean(),
+  /** The stage server; asset URLs (a picture a mode shows) are fetched from here. */
+  url: z.string().optional(),
   model: z
     .object({ status: z.string(), url: z.string().optional(), error: z.string().optional() })
     .optional(),

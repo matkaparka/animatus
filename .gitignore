@@ -56,3 +56,6 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+
+# ── tool worktrees (agents and other sessions work in copies of the repo here) ──
+/.claude/
