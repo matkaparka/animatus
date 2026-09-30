@@ -186,6 +186,7 @@ vram:
   # budget_mb: 12000               # leave out to read the card's size
   margin_mb: 512                   # kept free for the driver, the desktop and spikes
   resident: [tts]                  # services that stay loaded whatever the mode
+  # probe_port: 8777               # a running VRAM probe (docs/vram-measurements.md): it is told when each mode starts and ends
 
 console:
   open_browser: false

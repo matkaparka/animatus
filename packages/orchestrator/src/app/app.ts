@@ -702,6 +702,8 @@ export class App {
       this.runLog.add('mode', `${id}: ${view.state}`)
       const before = this.modeStates.get(id) ?? 'IDLE'
       this.modeStates.set(id, view.state)
+      if (view.state === 'STARTING' && before !== 'STARTING') this.probeMark(`enter:${id}`)
+      else if (view.state === 'STOPPING' && before !== 'STOPPING') this.probeMark(`exit:${id}`)
       if (view.state === 'ACTIVE' && before !== 'ACTIVE')
         this.automation.fire({ type: 'mode_entered', mode: id })
       else if (view.state === 'IDLE' && (before === 'ACTIVE' || before === 'STOPPING'))
@@ -941,6 +943,18 @@ export class App {
         ...(viewers.length > 0 ? { viewers } : {}),
       })
       .catch((e) => this.logger('error', `brain: ${(e as Error).message}`))
+  }
+
+  /** Tell a running VRAM probe that a mode starts or ends (`vram.probe_port`). Never waits, never throws, says nothing when the probe is not there. */
+  private probeMark(label: string): void {
+    const port = this.config.vram.probe_port
+    if (port === undefined) return
+    void fetch(`http://127.0.0.1:${port}/mark`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+      signal: AbortSignal.timeout(750),
+    }).catch(() => undefined)
   }
 
   /** What the last check before the voice did: a line in the run log (the class of thing, never the thing) and an alarm for a loop. */

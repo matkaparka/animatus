@@ -274,6 +274,12 @@ const Vram = z.strictObject({
   margin_mb: z.number().int().min(0).max(65536).default(512),
   /** Services that are always running and count against the budget all the time. */
   resident: z.array(PluginId).default(['tts']),
+  /**
+   * The control port of a running VRAM probe (`packages/vram-probe`, 8777 by default). When set, the program tells it
+   * when a mode starts and when it ends (`enter:<mode>` and `exit:<mode>`), so a recording says what each mode cost
+   * and whether the memory fell back afterwards. Nothing else is sent; a probe that is not running is ignored.
+   */
+  probe_port: z.number().int().min(1024).max(65535).optional(),
 })
 
 const Bilibili = z.strictObject({

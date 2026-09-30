@@ -40,6 +40,23 @@ state (largest transient gap 155 MiB).
   "High performance", the stage's WebGL memory moves onto the budget; the probe reports it either way
   (`off-target` vs the `stage` role).
 
+## How the numbers reach the admission check
+
+The admission check (the console's Modes page: which modes fit alone, which pairs fit together) reads
+`data/vram-measured.json` (reloaded every half minute, so a new figure takes effect without a restart): a list of
+`{ key, config_hash, peak_mb, steady_mb, measured_at, note }`, where `key` is a service name (`tts`, `forge`, ...) and
+`config_hash` is a hash of the settings that decide that service's memory (its manifest's `resources.config_keys`, for
+Forge the maximum long side). A figure only counts for the settings it was measured with: change the size and the entry no
+longer matches, the estimate takes over and the console says "not measured".
+
+The probe writes such an entry itself: `node packages/vram-probe/src/cli.ts summary FILE --window enter:draw..exit:draw
+--key forge --config-hash <hash> --write-measurement data/vram-measured.json`. With `vram.probe_port` set in the
+configuration, the orchestrator tells a running probe when each mode starts and ends (`enter:<mode>`, `exit:<mode>`), so a
+recording carries the windows and says what each mode cost and whether the memory fell back afterwards.
+
+The figures above are entered for this machine as `tts` (peak 3054, steady 2760) and `forge` at a maximum long side of 1024
+(peak 7280, steady 3794).
+
 ### Not yet measured
 
 - Forge unload without exiting the process (does the Forge build expose an unload endpoint?).

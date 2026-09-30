@@ -94,9 +94,15 @@ Not yet done: nothing for P2.
   treated as cut short, so the closing line was never said; the saved state could be overwritten by a read that
   finished late; two writes to the same state file could interleave; and stopping a mode that was still starting
   waited for the start to time out.
-- **Not yet measured or not yet done:** dance against the real stage window (the stage's own dance code has its
-  own tests and was seen in the P1 run); the other modes are described below or not built yet; the console has no
-  dance list or tuning panel yet (the API for both exists).
+- **Graphics memory.** Forge and GPT-SoVITS together were measured (10.0 GB peak on a 12 GB card, the memory fell back to
+  the speech-only level when Forge exited; docs/vram-measurements.md) and are entered in `data/vram-measured.json` for this
+  machine. Changing the maximum size makes the admission verdicts change (a test through the mode service: nothing measured at
+  a new size, so the estimate applies and says "not measured"). A running probe is told when every mode starts and ends
+  (`vram.probe_port`; tested with a stand-in server, and a probe that is not there is ignored). **Not done:** measuring each
+  of the other modes' services (singing, the screen capture, a local model) and the fall-back to the resident set after each
+  mode; only Forge has been.
+- **Not yet done:** dance against the real stage window (the stage's own dance code has its own tests and was seen in the
+  P1 run); no mode other than dance has run against the real stage, speech service or a real model.
 
 ## Sleep mode (docs/mode-sleep.md)
 

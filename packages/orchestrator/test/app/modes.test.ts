@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { LlmRequest } from '../../src/llm/types.ts'
+import { getFreePort } from '../../src/plugins/ports.ts'
 import { danmaku, installCleanup, rig, tempDir, until } from './rig.ts'
 import type { RigOptions } from './rig.ts'
 
@@ -594,5 +596,52 @@ describe('what a mode can use of the program', () => {
       () => r.app.runLog.recent(50).some((e) => e.text.includes('song command "request" ignored')),
       3000
     )
+  })
+})
+
+describe('telling a VRAM probe when a mode starts and ends', () => {
+  async function probeMarkRig(withProbe: boolean) {
+    const marks: string[] = []
+    const server = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c: Buffer) => (body += c.toString('utf8')))
+      req.on('end', () => {
+        if (req.method === 'POST' && req.url === '/mark') marks.push(String(JSON.parse(body).label))
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end('{}')
+      })
+    })
+    const port = await getFreePort()
+    if (withProbe) await new Promise<void>((r) => server.listen(port, '127.0.0.1', r))
+    const dir = await tempDir('modes')
+    await mkdir(path.join(dir, 'probe'), { recursive: true })
+    await writeFile(path.join(dir, 'probe', 'mode.yaml'), 'id: probe\ntitle: Probe\n')
+    const r = await rig({
+      app: {
+        modesDirs: [dir],
+        controllers: { probe: () => ({ enter: async () => {}, exit: async () => {} }) },
+      },
+      config: { modes: { probe: { enabled: true } }, vram: { probe_port: port } },
+    })
+    return { r, marks, close: () => new Promise<void>((res) => server.close(() => res())) }
+  }
+
+  it('sends enter:<mode> when a mode starts and exit:<mode> when it begins to end, and nothing else', async () => {
+    const { r, marks, close } = await probeMarkRig(true)
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    await until(() => marks.includes('enter:probe'), 3000, 'the enter mark')
+    await r.app.modeAction('probe', 'exit', { replace: false, force: false })
+    await until(() => marks.includes('exit:probe'), 3000, 'the exit mark')
+    expect(marks).toEqual(['enter:probe', 'exit:probe'])
+    await close()
+  })
+
+  it('a probe that is not running is not a problem: the mode starts and ends, and nothing is raised', async () => {
+    const { r } = await probeMarkRig(false)
+    await r.app.modeAction('probe', 'enter', { replace: false, force: false })
+    expect(r.app.modes.state('probe')).toBe('ACTIVE')
+    await r.app.modeAction('probe', 'exit', { replace: false, force: false })
+    expect(r.app.modes.state('probe')).toBe('IDLE')
+    expect(r.app.alarms.list().filter((a) => a.code.includes('probe'))).toEqual([])
   })
 })
