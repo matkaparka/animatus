@@ -120,6 +120,8 @@ export class MotionDirector {
   private idleTimer: number
   private idleSwitching = false
   private defaultIdleAction?: THREE.AnimationAction
+  /** The default idle is the built-in rest pose, to be replaced by the first real idle action. */
+  private fallbackIdle = false
   /** The next utterance (about to start sounding): its live clip, or null = rotate the talk clips. */
   private pendingUtterance: { clip: THREE.AnimationClip | null; at: number } | null = null
   private disposed = false
@@ -218,10 +220,18 @@ export class MotionDirector {
   }
 
   // ------------------------------------------------------------ idle
-  /** Change the idle action. `fade` = 0 switches at once (the first time). The first action ever set is the default idle. */
-  setIdle(action: THREE.AnimationAction, fade = 0) {
+  /**
+   * Change the idle action. `fade` = 0 switches at once (the first time). The first action ever set is the default idle.
+   * A `fallback` action (the built-in rest pose of a model without idle motions) is the default only until a real one
+   * is set, and never replaces a real one.
+   */
+  setIdle(action: THREE.AnimationAction, fade = 0, fallback = false) {
     if (this.idle?.action === action) return
-    if (!this.defaultIdleAction) this.defaultIdleAction = action
+    if (fallback && this.defaultIdleAction && !this.fallbackIdle) return
+    if (!this.defaultIdleAction || this.fallbackIdle) {
+      this.defaultIdleAction = action
+      this.fallbackIdle = fallback
+    }
     // `fade` sets the speed of both the old idle fading out and the new one fading in: with equal
     // rates the weights keep summing to 1.
     const f = fade > 0 ? fade : MOTION.talkFade

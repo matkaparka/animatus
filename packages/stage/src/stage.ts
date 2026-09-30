@@ -24,6 +24,7 @@ import {
   measureBody,
   mirrorVRMAnimation,
   parseVrma,
+  restPoseClip,
   type ModelInfo,
 } from './avatar/index.ts'
 import { FrameStats } from './diag/stats.ts'
@@ -375,6 +376,9 @@ export class Stage {
       this.avatar = avatar
       this.dance.setAvatar({ vrm, mixer, director: avatar.director })
       await this.applyIdle(avatar)
+      // no idle motion (no library, or a library without one): a relaxed pose instead of the T-pose
+      if (!avatar.director.idleAction)
+        avatar.director.setIdle(avatar.mixer.clipAction(restPoseClip(vrm)), 0, true)
       if (token !== this.modelToken) return
       vrm.scene.visible = true
       this.followHeadPending = true

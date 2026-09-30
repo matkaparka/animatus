@@ -11,6 +11,7 @@ export type {
 
 export { DEFAULT_SKIP_BONES, createClip, loadVrma, mirrorVRMAnimation, parseVrma } from './clips.ts'
 export type { CreateClipOptions } from './clips.ts'
+export { REST_POSE, restPoseClip } from './restPose.ts'
 
 export {
   DEFAULT_SACCADE,
