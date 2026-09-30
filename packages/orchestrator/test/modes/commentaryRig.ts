@@ -47,6 +47,12 @@ export interface RigOptions {
   /** Change the mode pack, for a pack that is broken. */
   pack?: (real: LoadedMode) => LoadedMode
   config?: AppConfigInput
+  /**
+   * Talk to the fake capture service over a real socket with the real client, like the program does. Sockets need real
+   * time, so the loop's waits are made a hundred times shorter and a test waits with `until` instead of `tick`
+   * (use `useCommentaryRig({ fakeTimers: false })`).
+   */
+  http?: boolean
 }
 
 export interface Rig {
@@ -77,10 +83,11 @@ export interface Rig {
 
 const cleanups: (() => Promise<void>)[] = []
 
-/** Call once at the top of a test file: fake timers before each test, everything torn down after. */
-export function useCommentaryRig(): void {
+/** Call once at the top of a test file: fake timers before each test (unless told not to), everything torn down after. */
+export function useCommentaryRig(opts: { fakeTimers?: boolean } = {}): void {
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    if (opts.fakeTimers !== false)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
   })
   afterEach(async () => {
     for (const c of cleanups.splice(0).reverse()) await c()
@@ -88,6 +95,28 @@ export function useCommentaryRig(): void {
     await flushJson()
   })
 }
+
+/** Waits (in real time) until the condition holds. */
+export async function until(cond: () => boolean, ms = 4000, what = 'the condition'): Promise<void> {
+  const t0 = Date.now()
+  while (!cond()) {
+    if (Date.now() - t0 > ms) throw new Error(`timed out waiting for ${what}`)
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+}
+
+/** The loop's waits, a hundred times shorter. */
+const quickSleep = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal.aborted) return resolve()
+    const done = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, Math.max(1, ms / 100))
+    signal.addEventListener('abort', done, { once: true })
+  })
 
 const standIn = (id: string, extra: Record<string, unknown> = {}): LoadedMode => ({
   manifest: ModeManifest.parse({ id, title: id, ...extra }),
@@ -121,6 +150,11 @@ export async function commentaryRig(opts: RigOptions = {}): Promise<Rig> {
 
   const fake = new FakeCapture()
   const svc = { status: 'ready', url: 'http://capture.test', started: 0, stopped: 0 }
+  if (opts.http) {
+    const served = await fake.serve()
+    svc.url = served.url
+    cleanups.push(served.close)
+  }
   const busy = { value: false }
   const gates: Rig['gates'] = { tell: null }
   let counter = 0
@@ -149,7 +183,11 @@ export async function commentaryRig(opts: RigOptions = {}): Promise<Rig> {
 
   let ctl!: CommentaryController
   const controllers: Record<string, ControllerFactory> = {
-    commentary: (h) => (ctl = createCommentaryController(h, { makeClient: () => fake.client() })),
+    commentary: (h) =>
+      (ctl = createCommentaryController(
+        h,
+        opts.http ? { sleep: quickSleep } : { makeClient: () => fake.client() }
+      )),
   }
   for (const id of others) controllers[id] = () => ({ enter: async () => {}, exit: async () => {} })
   const service: ModeService = new ModeService({
