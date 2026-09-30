@@ -102,6 +102,8 @@ async function rig(
     withoutPrompt?: string[]
     /** What the controller calls the image service with. */
     fetch?: typeof fetch
+    /** The service takes this long to come up (with `serviceUp: false`). */
+    starting?: Promise<void>
   } = {}
 ): Promise<Rig> {
   const dir = opts.dir ?? (await mkdtemp(path.join(tmpdir(), 'animatus-draw-')))
@@ -192,7 +194,10 @@ async function rig(
     packs: [pack],
     registry,
     supervisor: {
-      start: async () => ({ status: 'ready', url: forge.url }) as never,
+      start: async () => {
+        await opts.starting
+        return { status: 'ready', url: forge.url } as never
+      },
       stop: async () => ({}) as never,
       getStatus: () =>
         (opts.serviceUp === false
@@ -303,6 +308,40 @@ describe('entering and leaving', () => {
     const r = await rig({ enter: false })
     expect(r.chat('画 一条龙')).toBe(false)
     expect(r.llm.calls).toEqual([])
+  })
+
+  it('leaving while the service is still coming up is prompt, and nothing of the mode was ever switched on', async () => {
+    const coming = gate()
+    const r = await rig({ enter: false, serviceUp: false, starting: coming.wait })
+    const raised: string[] = []
+    r.service.on('alarm', (code) => raised.push(code))
+    const entering = r.service.enter('draw').catch((e: unknown) => e)
+    await until(() => r.service.state('draw') === 'STARTING', 2000, 'the mode to be starting')
+    const t0 = Date.now()
+    await r.exit('operator')
+    expect(Date.now() - t0).toBeLessThan(1000)
+    expect(r.service.state('draw')).toBe('IDLE')
+    expect(await entering).toBeInstanceOf(Error)
+    coming.open()
+    await pause(60)
+    expect(r.overlays).toEqual([])
+    expect(r.alarms).toEqual([])
+    expect(raised).toEqual([]) // giving up a start on request is not a failure
+    expect(r.ctl.status()).toMatchObject({ active: false })
+    expect(r.chat('画 一条龙')).toBe(false)
+  })
+
+  it('a start the mode manager gave up on is not switched on afterwards: it refuses to finish', async () => {
+    const r = await rig({ enter: false })
+    const ctx = {
+      id: 'draw',
+      manifest: pack.manifest,
+      signal: AbortSignal.abort(),
+      log: () => {},
+    }
+    await expect(r.ctl.enter(ctx)).rejects.toThrow('aborted while starting')
+    expect(r.ctl.status().active).toBe(false)
+    expect(r.overlays).toEqual([])
   })
 })
 
@@ -779,6 +818,25 @@ describe('when something is broken', () => {
     expect(r.alarms[0]!.message).toContain('the model could not plan the picture')
     expect(r.alarms[0]!.message).toContain('quota')
     expect(work(r).map((c) => c.path)).toEqual(['/catalog'])
+  })
+
+  it('the image service gives up on a picture that takes too long: the same, and the viewer may ask again at once', async () => {
+    const r = await rig()
+    r.forge.generate = () =>
+      serviceError(
+        504,
+        'forge_timeout',
+        'Forge did not answer POST /sdapi/v1/txt2img within 300 s',
+        true
+      )
+    r.chat('画 一条龙')
+    await until(() => r.said.length === 1)
+    expect(r.alarms[0]!.message).toContain('did not answer')
+    expect(texts(r).at(-1)).toBe('on:弹幕发送「画 + 内容」召唤作品')
+    r.forge.generate = () => okPicture()
+    r.chat('画 一条龙')
+    await until(() => r.told.length === 1)
+    expect(r.alarms).toEqual([])
   })
 
   it('the image service fails while drawing: its own words in the alarm, the frame back, no picture', async () => {

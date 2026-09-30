@@ -53,7 +53,7 @@ const lastText = (req: LlmRequest) => {
 }
 
 /** The whole program with the draw mode switched on, a fake image service and a model that plans and comments. */
-async function drawRig(over: Record<string, unknown> = {}) {
+async function drawApp(over: Record<string, unknown> = {}) {
   const forge = new FakeForgeService()
   await forge.start()
   onCleanup(() => forge.stop())
@@ -74,6 +74,12 @@ async function drawRig(over: Record<string, unknown> = {}) {
       : tagOf(req) === 'draw-write'
         ? [writeAnswer('a dragon asleep in a crater')]
         : ['[happy]What a fine dragon.']
+  return { r, forge }
+}
+
+/** The program with the mode on and a stage page connected. */
+async function drawRig(over: Record<string, unknown> = {}) {
+  const { r, forge } = await drawApp(over)
   const stage = await r.connect()
   await until(() => r.app.stage.hub.connected, 2000, 'the stage page')
   return { r, forge, stage }
@@ -300,6 +306,22 @@ describe('the draw mode, through the whole program', () => {
     await until(() => frames(late).length >= 1, 3000, 'the frame on the new page')
     expect(overlayText(frames(late).at(-1)!)).toBe('on:点图：ann')
     expect(frames(late).at(-1)!.image).toBe(frames(stage).at(-1)!.image)
+  })
+
+  it('with no stage page connected the mode still works, and a page that connects later gets the picture', async () => {
+    const { r, forge } = await drawApp()
+    await enter(r)
+    r.bili.emit(danmaku('画 一条龙'))
+    await until(() => forge.generateCalls().length === 1, 8000, 'the request')
+    const frame = () => r.app.stage.hub.snapshots.overlays.find((o) => o.id === 'frame')
+    await until(() => frame()?.image !== undefined, 8000, 'the picture to be in the frame')
+    expect(await readdir(path.join(r.dir, 'data', 'generated'))).toHaveLength(1)
+    expect(r.app.alarms.list().filter((a) => a.code === 'draw_failed')).toEqual([])
+
+    const late = await r.connect()
+    await until(() => frames(late).length >= 1, 3000, 'the frame on the page')
+    expect(overlayText(frames(late).at(-1)!)).toBe('on:点图：ann')
+    expect(frames(late).at(-1)!.image).toBe(frame()!.image)
   })
 
   it('stopping the mode while a picture is being drawn: the service is told, the frame goes, nothing is said', async () => {

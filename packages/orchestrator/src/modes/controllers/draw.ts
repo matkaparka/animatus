@@ -563,6 +563,8 @@ export function createDrawController(
       if (!host.serviceUrl(cfg.service))
         throw new Error(`the "${cfg.service}" service is not running`)
       await cooldowns.load()
+      // The mode manager does not call `exit` for a start it gave up on: nothing may be switched on after that.
+      if (ctx.signal.aborted) throw new Error('aborted while starting')
       const words = ctx.manifest.triggers.danmaku_prefix
       command = words.find((w) => !w.startsWith('/')) ?? words[0] ?? command
       queue.length = 0
