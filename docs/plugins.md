@@ -88,6 +88,13 @@ Real failures (a synthesis, a generation, a download) return a non-2xx status wi
 image service's maximum long side), and `POST /config` on a service is how the console changes a
 setting that must survive a restart.
 
+## Plugins that ship
+
+| Plugin | Kind | What |
+|---|---|---|
+| `gptsovits`, `gptsovits-attach` | speech | GPT-SoVITS started by the program, or one already running |
+| `screencap` | capture | copies one window as a picture for the commentary mode; Windows only, loopback only ([mode-commentary.md](mode-commentary.md)) |
+
 ## Adapters
 
 Adapters run inside the orchestrator and receive an `AdapterContext` (base URL, config, the secrets the

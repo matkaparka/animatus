@@ -35,7 +35,8 @@ stage:
   presets:
     layouts:
       corner: { char: { x: 55, y: 0, scale: 0.4 } }     # the character small in a corner, room for a picture or a game
-    backgrounds: {}
+    backgrounds:
+      night: { kind: color, color: "#0a1020" }         # sleep mode asks for it by name; an image works too: { kind: image, url: /asset/models/night.png, dim: 0.3 }
     looks: {}
   # Leave out `browser` to open the stage yourself (OBS browser source, any Chromium in app mode).
   browser:
@@ -83,6 +84,11 @@ inbox:
   filter: { danmaku_max_age_sec: 30, max_merge: 3, min_chars: 2, max_chars: 80, repeat_window_sec: 60 }
   pacer: { idle_settle_sec: 1.5, busy_timeout_sec: 20, min_interval_sec: 2 }
   ignore_uids: []
+  sleep:                           # how often chat is answered while the sleep mode runs (docs/mode-sleep.md)
+    enabled: true
+    first_reply_after_sec: 30
+    reply_interval_sec: 90
+    max_age_sec: 180
 
 sources:
   bilibili:
@@ -102,6 +108,8 @@ plugins:
       url: http://127.0.0.1:9880
   motion:
     enabled: false
+  screencap:                       # copies one window for the commentary mode to look at (Windows only, docs/mode-commentary.md)
+    enabled: false
   forge:
     enabled: false
     config:
@@ -119,6 +127,12 @@ modes:
       pending_timeout_sec: 90      # a request waits this long for the reply that carried it to be spoken
       outro_window_sec: 8          # after the dance the model has this long to start its closing line
       start_timeout_sec: 30        # the stage must report the dance as playing within this long
+  sleep:                           # a long whisper track, a calm look, rare whispered replies (docs/mode-sleep.md)
+    enabled: false                 # needs paths.asmr, a `whisper` entry in tts.styles and the `night` background above
+    config: {}                     # volume, fade_in_s, fade_s, shuffle, loop, captions, ... all optional
+  commentary:                      # comments on what a game window shows (docs/mode-commentary.md)
+    enabled: false                 # needs plugins.screencap.enabled and a model that accepts pictures
+    config: {}                     # window ("exe:game.exe" or part of a title), interval_sec, language, ... all optional
 
 # What the character remembers between streams (docs/memory.md). Off by default: it keeps what viewers say about
 # themselves. Files are Markdown under data/memory; the console's Memory tab edits them.

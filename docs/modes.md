@@ -100,6 +100,14 @@ Prompts the model sees: the active prompt of every running mode (`prompt:` in th
 advertisement of every mode that could be entered. They are markdown files in the pack; an operator overrides
 a file by putting the same name in `config/modes/<id>/prompts/`, file by file, without copying the rest.
 
+## The modes that ship
+
+| Mode | What | Needs | Documentation |
+|---|---|---|---|
+| `dance` | dances to music when a viewer asks, holds the voice, says a closing line | dances in the motion library | below |
+| `sleep` | a long whisper track, a calm look, chat answered now and then in a whisper | `paths.asmr`, a `whisper` voice style, a `night` background | [mode-sleep.md](mode-sleep.md) |
+| `commentary` | comments on what a game window shows | the `screencap` plugin, a model that accepts pictures | [mode-commentary.md](mode-commentary.md) |
+
 ## Dance
 
 Pack: `modes/dance/`, controller `controllers/dance.ts`. Dances are folders under the motion library's

@@ -95,8 +95,34 @@ Not yet done: nothing for P2.
   finished late; two writes to the same state file could interleave; and stopping a mode that was still starting
   waited for the start to time out.
 - **Not yet measured or not yet done:** dance against the real stage window (the stage's own dance code has its
-  own tests and was seen in the P1 run); the other modes (sleep, sing, draw, commentary, game) have no controller
-  yet; the console has no dance list or tuning panel yet (the API for both exists).
+  own tests and was seen in the P1 run); the other modes are described below or not built yet; the console has no
+  dance list or tuning panel yet (the API for both exists).
+
+## Sleep mode (docs/mode-sleep.md)
+
+- **Tested:** 116 tests, all green: the controller through the real mode service with a fake host and fake timers
+  (71), the pure modules (32), end to end through the real application with a real stage server and a page that
+  answers the sleep messages (12, about 11 s), and one seeded random test (120 seeds of 80 steps by default, 4,000
+  also clean) that races entering and leaving, replays odd stage reports, and checks after every step the flag, the
+  voice, the holds, the alarms, that nothing is spoken on top of a whisper, and that leaving leaves no timer, hold or
+  flag. The tests found and fixed: a retry lost when a page connected in the middle of a reply after every track had
+  failed, a volume set while a track loads that never applied, a track cap that counted skipped names.
+- **Not verified:** nothing ran against the real stage window, the real speech service or a real track. The stage side
+  is modelled on the stage's own sleep code. Not measured: how the light and dim values look on screen, whisper
+  loudness against the track, how long a reply takes the track away. The stage has no live volume message, so a
+  volume change on a playing track is a pause and a resume with a short fade.
+
+## Commentary mode and the screencap service (docs/mode-commentary.md)
+
+- **Tested:** 207 TypeScript tests (units, the capture client, the controller through the real mode service, the
+  failure paths, the panel actions, a real socket, end to end through the real application) and 75 Python tests for
+  the capture service (68 by default; the 7 opt-in tests that capture real windows, including one of a DPI-unaware
+  program, also pass). Key behaviours were broken on purpose and the tests failed.
+- **Not verified:** real games (exclusive fullscreen is black by nature, elevated programs' windows, DRM video,
+  mixed-DPI monitors), a real multimodal model, the console drawing the mode's panel, and the cost and quality of a
+  comment (the cost is by construction: one small reading call and one spoken call with one 768 px picture).
+- A picture sent to the model can carry writing, so `tellBrain` with pictures is untrusted whatever the mode
+  says (see P5).
 
 ## P4: memory
 

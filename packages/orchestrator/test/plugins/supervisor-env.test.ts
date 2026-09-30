@@ -61,7 +61,9 @@ const lowerKeys = (env: Record<string, string>) => Object.keys(env).map((key) =>
 
 describe('the environment of a plugin process', () => {
   it('drops NoDefaultCurrentDirectoryInExePath, keeps the rest, and sets Python-friendly defaults', async () => {
-    const baseEnv = { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', KEEP_ME: 'kept' }
+    // the defaults only apply to what the environment leaves unset: start from a shell that sets neither
+    const { PYTHONIOENCODING: _enc, PYTHONUNBUFFERED: _unbuf, ...shell } = process.env
+    const baseEnv = { ...shell, NoDefaultCurrentDirectoryInExePath: '1', KEEP_ME: 'kept' }
     const { supervisor, infoFile, id } = await setup({ supervisor: { baseEnv } })
     await supervisor.start(id)
     const { env } = await readInfo(infoFile)
@@ -477,7 +479,9 @@ describe.runIf(CAN_RUN_GUARD)('the job guard around a real Python service', () =
       http: { method: 'POST', path: '/shutdown' },
       grace_ms: 8000,
     })
-    const supervisor = await makeSupervisor([entry])
+    // the defaults under test only apply to what the shell leaves unset
+    const { PYTHONIOENCODING: _enc, PYTHONUNBUFFERED: _unbuf, ...shell } = process.env
+    const supervisor = await makeSupervisor([entry], { baseEnv: shell })
     const state = await supervisor.start('py')
     expect(state.status).toBe('ready')
     expect(state.health?.service).toBe('fake-py')
