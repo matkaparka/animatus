@@ -124,9 +124,17 @@ Not yet done: nothing for P2.
   failure paths, the panel actions, a real socket, end to end through the real application) and 75 Python tests for
   the capture service (68 by default; the 7 opt-in tests that capture real windows, including one of a DPI-unaware
   program, also pass). Key behaviours were broken on purpose and the tests failed.
+- **With the real services** (the real application, Gemini, GPT-SoVITS and a Chrome stage window; the mode entered
+  through the console's API): the window list held every open window with its program and size; a window that was
+  minimised was reported on the panel and as the `commentary_capture` alarm, in words that say what to do; once it was
+  restored the capture (1902x1112, sent as 768x449, by PrintWindow) went to the model, which read a text-only mock
+  of a game screen (a boss fight, a score line) and said so, and said it did not know which game it was (confidence 0.0
+  to 0.3, the window was a text editor), in three comments over about a minute, each spoken with an emotion and, in
+  two of them, a pose from the motion library. Leaving the mode stopped the capture service.
 - **Not verified:** real games (exclusive fullscreen is black by nature, elevated programs' windows, DRM video,
-  mixed-DPI monitors), a real multimodal model, the console drawing the mode's panel, and the cost and quality of a
-  comment (the cost is by construction: one small reading call and one spoken call with one 768 px picture).
+  mixed-DPI monitors), the console page drawing the mode's panel in that run (the panel's data was read through the
+  API), and the cost and quality of a comment over a long session (the cost is by construction: one small reading call
+  and one spoken call with one 768 px picture).
 - A picture sent to the model can carry writing, so `tellBrain` with pictures is untrusted whatever the mode
   says (see P5).
 
