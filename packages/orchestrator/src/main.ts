@@ -39,7 +39,12 @@ async function main(): Promise<number> {
   let app: App
   try {
     const config = await loadConfig(file, { root: repoRoot })
-    app = await App.create({ config, noBrowser: values['no-browser'], dev: values.dev })
+    app = await App.create({
+      config,
+      noBrowser: values['no-browser'],
+      dev: values.dev,
+      console: true,
+    })
   } catch (e) {
     if (e instanceof ConfigError) {
       console.error(e.message)
@@ -60,6 +65,13 @@ async function main(): Promise<number> {
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 
   await app.start()
+  // The one place the console's token is printed, on purpose: it opens the console, and nothing else may carry it.
+  const url = app.consoleUrl
+  if (url)
+    process.stderr.write(`
+Console: ${url}
+
+`)
   return -1 // keep running
 }
 

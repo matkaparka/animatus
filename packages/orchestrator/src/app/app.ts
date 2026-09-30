@@ -13,12 +13,21 @@
 import type { ChildProcess } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { Emotion, RunEvent, SayRequest, InjectRequest, StatusView } from '@animatus/protocol'
+import type {
+  Emotion,
+  InjectRequest,
+  ModeAction,
+  ModeRequest,
+  ModeView,
+  RunEvent,
+  SayRequest,
+  StatusView,
+} from '@animatus/protocol'
 import { CameraAdjust, NO_CAMERA_ADJUST, trustFor } from '@animatus/protocol'
 import { Brain } from '../brain/brain.ts'
 import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
-import { parseConfig, toProviderConfig } from '../config.ts'
+import { parseConfig, secretRefs, toProviderConfig } from '../config.ts'
 import type { AppConfig, LlmProviderEntry } from '../config.ts'
 import { Blocklist, Pacer, Router, emptyBlocklist } from '../inbox/index.ts'
 import type { BlockChecker, PacerState } from '../inbox/index.ts'
@@ -53,6 +62,7 @@ import { SwitchableTts } from '../tts/lazy.ts'
 import { SpeechFilter } from '../tts/text.ts'
 import type { TtsAdapter } from '@animatus/protocol'
 import { AlarmBoard, RunLog, TraceBoard } from './board.ts'
+import { AppError } from './errors.ts'
 
 /** Names the console's key page and `${secret:x}` references know, and the variables they are read from. */
 export const WELL_KNOWN_SECRETS: Readonly<Record<string, string>> = {
@@ -92,6 +102,10 @@ export interface AppOptions {
   pluginsDir?: string
   /** `welcome.dev` for the stage. */
   dev?: boolean
+  /** Start the console server too (`main.ts` does; the tests of the other parts do not). */
+  console?: boolean
+  /** The console's Vite build. Default: packages/console/dist under the project root. */
+  consoleDir?: string
 }
 
 /** Flags the mode manager (dance, sing, sleep) will set; the pacer treats each as "busy". */
@@ -340,6 +354,7 @@ export class App {
     const previous = this.gateway
     if (providers.length === 0) {
       this.gateway = null
+      this.llmOrderIds = []
       if (this.config.llm.providers.length === 0)
         this.alarms.raise(
           'llm_none',
@@ -351,6 +366,7 @@ export class App {
     } else {
       this.alarms.clear('llm_none')
       const order = (this.config.llm.order ?? ids).filter((id) => ids.includes(id))
+      this.llmOrderIds = order.length > 0 ? order : ids
       this.gateway = new LlmGateway({
         providers,
         order: order.length > 0 ? order : ids,
@@ -450,12 +466,15 @@ export class App {
     })
 
     // plugins
-    const onStatus = (ev: StatusEvent) => this.onPluginStatus(ev)
+    const onStatus = (ev: StatusEvent) => {
+      this.handlePluginStatus(ev)
+      for (const fn of this.pluginListeners) fn(ev.id, ev.status)
+    }
     this.supervisor.on('status', onStatus)
     this.disposers.push(() => void this.supervisor.off('status', onStatus))
   }
 
-  private onPluginStatus(ev: StatusEvent): void {
+  private handlePluginStatus(ev: StatusEvent): void {
     const entry = this.registry.get(ev.id)
     this.runLog.add(
       'plugin',
@@ -698,6 +717,56 @@ export class App {
       case 'enter':
         break
     }
+  }
+
+  // ───────────────────────────── what the console reads and does ─────────────────────────────
+
+  private llmOrderIds: string[] = []
+  private readonly pluginListeners = new Set<(id: string, status: StatusEvent['status']) => void>()
+  private readonly modeListeners = new Set<(mode: ModeView) => void>()
+  private consoleServer: { openUrl: string; stop(): Promise<void> } | null = null
+
+  /** The provider ids in the order they are tried right now. */
+  llmOrder(): string[] {
+    return [...this.llmOrderIds]
+  }
+
+  /** Called when a plugin changes state. Returns the unsubscribe. */
+  onPluginStatus(fn: (id: string, status: StatusEvent['status']) => void): () => void {
+    this.pluginListeners.add(fn)
+    return () => void this.pluginListeners.delete(fn)
+  }
+
+  /** Called when a mode changes state. Returns the unsubscribe. */
+  onModeChange(fn: (mode: ModeView) => void): () => void {
+    this.modeListeners.add(fn)
+    return () => void this.modeListeners.delete(fn)
+  }
+
+  modeViews(): ModeView[] {
+    return []
+  }
+
+  async modeAction(id: string, _action: ModeAction, _req: ModeRequest): Promise<ModeView> {
+    throw new AppError('unknown_mode', `there is no mode "${id}"`, 404)
+  }
+
+  /** A secret was written or deleted: whatever was built from it is rebuilt. */
+  async secretsChanged(name: string): Promise<void> {
+    const uses = (v: unknown): boolean =>
+      typeof v === 'string'
+        ? secretRefs(v).includes(name)
+        : Array.isArray(v)
+          ? v.some(uses)
+          : v !== null && typeof v === 'object'
+            ? Object.values(v).some(uses)
+            : false
+    if (uses(this.config.llm.providers)) await this.reloadLlm()
+  }
+
+  /** The address to open the console at, token included. Print it once; never log it. */
+  get consoleUrl(): string | null {
+    return this.consoleServer?.openUrl ?? null
   }
 
   // ───────────────────────────── console-facing actions ─────────────────────────────
@@ -957,6 +1026,31 @@ export class App {
       }
     }
     this.logger('info', `stage: ${this.stage.url}/`)
+    if (this.options.console) await this.startConsole()
+  }
+
+  private async startConsole(): Promise<void> {
+    try {
+      const { AppBackend } = await import('../console/appBackend.ts')
+      const { createConsoleServer } = await import('../console/server.ts')
+      const backend = new AppBackend(this)
+      const server = createConsoleServer({
+        port: this.config.servers.console_port,
+        staticDir:
+          this.options.consoleDir ?? path.join(this.config.root, 'packages', 'console', 'dist'),
+        backend,
+        logger: this.logger,
+      })
+      await server.start()
+      backend.onEvent((event) => server.publish(event))
+      this.consoleServer = server
+      this.logger(
+        'info',
+        `console: ${server.url}/ (the address with its token is printed once, below)`
+      )
+    } catch (e) {
+      this.alarms.raise('console', 'error', `the console could not be started: ${firstLine(e)}`)
+    }
   }
 
   async stop(): Promise<void> {
@@ -968,6 +1062,7 @@ export class App {
     this.director.dispose()
     for (const d of this.disposers.splice(0)) d()
     if (this.stateTimer) await this.flushStageState()
+    await this.consoleServer?.stop().catch(() => undefined)
     await this.source?.stop().catch(() => undefined)
     await this.supervisor
       .stopAll()
