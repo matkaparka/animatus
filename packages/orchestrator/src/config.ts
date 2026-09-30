@@ -23,6 +23,7 @@ import {
   PresetName,
   Rect,
   SubtitleVariant,
+  ToolTier,
 } from '@animatus/protocol'
 import { InboxConfigSchema } from './inbox/types.ts'
 import type { InboxConfig } from './inbox/types.ts'
@@ -233,6 +234,26 @@ const Memory = z.strictObject({
     .prefault({}),
 })
 
+/**
+ * What the model may ask the program to do (docs/tools.md). A tool that changes anything waits for the streamer's yes in
+ * the console, and one asked for by text that came from the audience is refused outright.
+ */
+const Tools = z.strictObject({
+  /** Off: the model is told of no tools and tool blocks in its replies are ignored. */
+  enabled: z.boolean().default(true),
+  /**
+   * The tier of a tool by name: free, approval or disabled. A tool never goes below its own floor (`enter_mode`,
+   * `exit_mode` and `remember` cannot be made free).
+   */
+  tiers: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,47}$/), ToolTier).default({}),
+  /** How long a request waits for the streamer's answer before it is dropped. */
+  approval_ttl_sec: z.number().int().min(10).max(86_400).default(600),
+  /** Requests waiting at once. */
+  max_pending: z.number().int().min(1).max(200).default(20),
+  /** Calls one source may ask for per minute; the rest are refused. */
+  per_minute: z.number().int().min(1).max(600).default(20),
+})
+
 /** Graphics memory the modes are admitted against. */
 const Vram = z.strictObject({
   /** Dedicated memory of the card in MiB; leave out to read it from nvidia-smi. */
@@ -278,6 +299,7 @@ export const AppConfigSchema = z.strictObject({
   modes: z.record(PluginId, ModeEntry).default({}),
   vram: Vram.prefault({}),
   memory: Memory.prefault({}),
+  tools: Tools.prefault({}),
   console: Console.prefault({}),
 })
 export type AppConfigInput = z.input<typeof AppConfigSchema>

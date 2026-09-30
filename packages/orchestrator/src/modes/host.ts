@@ -68,8 +68,12 @@ export interface ModeHost {
 
   // ── the model
   /**
-   * A privileged system message ("you just finished a dance"): it goes through the same brain as a chat reply
-   * (persona, history, tags, speech). Resolves when the model's answer is written, not when it is spoken.
+   * A system message ("you just finished a dance"): it goes through the same brain as a chat reply (persona, history,
+   * tags, speech). Resolves when the model's answer is written, not when it is spoken.
+   *
+   * The reply is judged as untrusted (a tool it asks for can only be a free one) unless `fromProgram` is set. Set
+   * it only when nothing in the text or the extras was written by a viewer or came from outside: no name, no
+   * song title, no chat line, no page text. A message with pictures is never trusted, whatever this says.
    */
   tellBrain(
     text: string,
@@ -78,6 +82,8 @@ export interface ModeHost {
       preempt?: boolean
       /** Pictures the model should see with this message. */
       images?: { mime: string; base64: string }[]
+      /** The text is the program's own words, nobody else's. */
+      fromProgram?: boolean
     }
   ): Promise<void>
   /** True while the brain is writing a reply. */

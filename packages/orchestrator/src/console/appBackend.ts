@@ -7,6 +7,8 @@
  */
 import {
   CONSOLE_API_VERSION,
+  type ApprovalView,
+  type ApprovalsResponse,
   type ConsoleEvent,
   type InjectRequest,
   type LlmProviderView,
@@ -28,7 +30,12 @@ import { AppError } from '../app/errors.ts'
 import { publicConfig, secretRefs } from '../config.ts'
 import { PluginDisabledError, UnknownPluginError } from '../plugins/supervisor.ts'
 import { SecretStoreError } from '../plugins/secrets.ts'
-import { ApiFailure, type ConsoleBackend, type MemoryBackend } from './backend.ts'
+import {
+  ApiFailure,
+  type ApprovalsBackend,
+  type ConsoleBackend,
+  type MemoryBackend,
+} from './backend.ts'
 import { createMemoryBackend } from './memoryBackend.ts'
 
 export interface AppBackendOptions {
@@ -98,6 +105,7 @@ export class AppBackend implements ConsoleBackend {
       modes: this.modeViews(),
       llm: this.llmView(),
       alarms: app.alarms.list(),
+      approvals_pending: app.tools.pending().length,
     }
   }
 
@@ -253,6 +261,21 @@ export class AppBackend implements ConsoleBackend {
     return this.secretView(name)
   }
 
+  // ─────────────────────────────── approvals ───────────────────────────────
+
+  readonly approvals: ApprovalsBackend = {
+    list: (): ApprovalsResponse => ({
+      pending: this.app.tools.pending(),
+      recent: this.app.tools.recent(),
+    }),
+    decide: async (id: string, action: 'approve' | 'deny'): Promise<ApprovalView> => {
+      const r = action === 'approve' ? await this.app.tools.approve(id) : this.app.tools.deny(id)
+      if (!r.ok)
+        throw new ApiFailure(`approval_${r.code}`, r.message, r.code === 'not_found' ? 404 : 409)
+      return r.view
+    },
+  }
+
   // ─────────────────────────────── actions ───────────────────────────────
 
   say(req: SayRequest): void {
@@ -298,6 +321,9 @@ export class AppBackend implements ConsoleBackend {
         }
       }),
       app.onModeChange((mode) => listener({ type: 'mode', mode })),
+      app.onApprovalsChange(() =>
+        listener({ type: 'approvals', pending: app.tools.pending().length })
+      ),
     ]
     return () => offs.forEach((off) => off())
   }

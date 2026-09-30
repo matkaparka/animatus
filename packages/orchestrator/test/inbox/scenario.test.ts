@@ -201,7 +201,7 @@ describe('a quiet room', () => {
       [540_000, '【冷场】已经9分钟没有人发弹幕了'],
     ])
     expect(sent[0]?.parts).toEqual([
-      { prio: 4, kind: 'cold', text: '【冷场】已经3分钟没有人发弹幕了' },
+      { prio: 4, kind: 'cold', role: 'system', text: '【冷场】已经3分钟没有人发弹幕了' },
     ])
   })
 

@@ -13,16 +13,19 @@
  * were already accepted before the failure are still spoken.
  */
 import { EventEmitter } from 'node:events'
-import type { ClipRef, Emotion, TrustLevel } from '@animatus/protocol'
+import { makeSource } from '@animatus/protocol'
+import type { ClipRef, Emotion, EventSource, TrustLevel } from '@animatus/protocol'
 import type { ChatMessage, LlmDelta, LlmRequest } from '../llm/types.ts'
 import type { SpeechItem } from '../speech/director.ts'
 import { ChatLog } from './chatlog.ts'
 import type { ChatEntry } from './chatlog.ts'
-import { buildSystemPrompt } from './prompt.ts'
-import type { ModePrompt } from './prompt.ts'
+import { MAX_TOOL_CALLS_PER_REPLY, buildSystemPrompt } from './prompt.ts'
+import type { ModePrompt, ToolAdvert } from './prompt.ts'
 import { SpeechSegmenter } from './segmenter.ts'
 import { consumeStream } from './stream.ts'
 import { parseEmotion, parseMotionTag } from './tags.ts'
+import { parseToolBlock } from './toolblock.ts'
+import type { ToolBlockProblem } from './toolblock.ts'
 import type { SegmenterEvent, StreamDelta } from './types.ts'
 
 /** Where the sentences of one reply go: a `SpeechTurn` fits. */
@@ -50,6 +53,11 @@ export interface BrainInput {
   /** Where it came from, for the record; trust never comes from the text. */
   source: NonNullable<ChatEntry['source']>
   trust: TrustLevel
+  /**
+   * The lowest trust among everything this reply answers, as the tool gate will see it: a tool the model asks for in
+   * this reply is judged by this. `origin` may say more about who it was (name, id) but can never raise `trust`.
+   */
+  origin?: EventSource
   /** Display name of the audience member, for the record. */
   name?: string
   /** One-off prompt blocks for this reply only (for example a note about a gift). */
@@ -87,6 +95,15 @@ export type BrainEvents = {
   'dance.request': [info: { turnId: string; name?: string }]
   /** A motion tag named no clip the stage has. */
   'motion.unknown': [info: { turnId: string; tag: string }]
+  /**
+   * The finished reply asked for a tool. Only complete replies get here (not cancelled, not failed), at most
+   * `MAX_TOOL_CALLS_PER_REPLY` per reply, in the order written. Nothing has been checked: the tool gate decides.
+   */
+  'tool.call': [
+    info: { turnId: string; tool: string; args: Record<string, unknown>; origin: EventSource },
+  ]
+  /** A tool block that was not taken (cut short, not JSON, too big, or more than the limit). */
+  'tool.ignored': [info: { turnId: string; reason: ToolBlockProblem }]
   /** The full visible text of the reply (tags included, code blocks left out), once the reply ended. */
   reply: [info: { turnId: string; text: string }]
   'turn.end': [summary: TurnSummary]
@@ -113,6 +130,13 @@ export interface BrainOptions {
   modePrompts?: () => readonly ModePrompt[]
   /** Recalled memory lines for this input (a viewer's text never becomes an instruction). */
   memory?: (input: BrainInput) => readonly string[]
+  /**
+   * The tools this reply may ask for. Without it tool blocks in a reply are ignored. It should list only what a call
+   * with `input.trust` could get anywhere with; the gate refuses the rest anyway.
+   */
+  tools?: (input: BrainInput) => readonly ToolAdvert[]
+  /** Notes carried over from earlier (what became of the tools asked for), taken once at the start of a reply. */
+  notes?: () => readonly string[]
   /** Latest chat entries sent along with a request (the new message included). Default 10 + 1. */
   historyMessages?: number
   temperature?: number
@@ -198,8 +222,9 @@ export class Brain extends EventEmitter<BrainEvents> {
       persona: o.persona(),
       ...(o.motionTags ? { motionTags: o.motionTags() } : {}),
       modePrompts: o.modePrompts?.() ?? [],
+      ...(o.tools ? { tools: o.tools(input) } : {}),
       memory: o.memory?.(input) ?? [],
-      extras: input.extras ?? [],
+      extras: [...(input.extras ?? []), ...(o.notes?.() ?? [])],
       // The placeholder carries the exchanges before this message; the message itself follows separately.
       historyText: o.chat.historyText(n - 1, 1),
     })
@@ -236,6 +261,7 @@ export class Brain extends EventEmitter<BrainEvents> {
       totalMs: 0,
     }
     let displayed = ''
+    const calls: { tool: string; args: Record<string, unknown> }[] = []
     try {
       // The user's line is part of the record before the model sees it, and stays there whatever happens next.
       o.chat.append({
@@ -269,8 +295,10 @@ export class Brain extends EventEmitter<BrainEvents> {
           displayed += ev.text
         } else if (ev.kind === 'speech') {
           this.onSentence(turn, director, ev, summary, started)
+        } else if (ev.kind === 'code' && ev.lang === 'tool' && o.tools) {
+          this.onToolBlock(turn, ev, calls)
         }
-        // Code blocks are shown in the record only (the segmenter leaves their content out of the display text).
+        // Other code blocks are shown in the record only (the segmenter leaves their content out of the display text).
       }
 
       const result = await consumeStream(
@@ -306,6 +334,12 @@ export class Brain extends EventEmitter<BrainEvents> {
       o.chat.append({ role: 'assistant', content: reply, ts: this.now() })
       this.safeEmit('reply', { turnId: id, text: reply })
     }
+    // A reply that was cut off, cancelled or failed asks for nothing: half a request is not a request.
+    if (summary.status === 'done') {
+      const origin = originOf(input)
+      for (const c of calls)
+        this.safeEmit('tool.call', { turnId: id, tool: c.tool, args: c.args, origin })
+    }
     summary.totalMs = this.now() - started
     if (summary.error) {
       this.log('error', `brain: ${id} failed: ${summary.error.message}`)
@@ -313,6 +347,20 @@ export class Brain extends EventEmitter<BrainEvents> {
     }
     this.safeEmit('turn.end', summary)
     return summary
+  }
+
+  private onToolBlock(
+    turn: Turn,
+    ev: Extract<SegmenterEvent, { kind: 'code' }>,
+    calls: { tool: string; args: Record<string, unknown> }[]
+  ): void {
+    const ignore = (reason: ToolBlockProblem) =>
+      this.safeEmit('tool.ignored', { turnId: turn.id, reason })
+    if (ev.unterminated) return ignore('unterminated')
+    if (calls.length >= MAX_TOOL_CALLS_PER_REPLY) return ignore('too_many')
+    const parsed = parseToolBlock(ev.content)
+    if (!parsed.ok) return ignore(parsed.reason)
+    calls.push({ tool: parsed.tool, args: parsed.args })
   }
 
   private onSentence(
@@ -359,6 +407,14 @@ export class Brain extends EventEmitter<BrainEvents> {
       })
     }
   }
+}
+
+const TRUST_RANK: Record<TrustLevel, number> = { untrusted: 0, trusted: 1, privileged: 2 }
+
+/** Who a tool call of this reply is judged as: never more trusted than the input's own trust. */
+function originOf(input: BrainInput): EventSource {
+  const base = input.origin ?? makeSource(input.source, input.name ? { name: input.name } : {})
+  return TRUST_RANK[input.trust] < TRUST_RANK[base.trust] ? { ...base, trust: input.trust } : base
 }
 
 /** The gateway's deltas without the usage snapshots. */

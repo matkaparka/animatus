@@ -119,10 +119,22 @@ export type Priority = (typeof PRIORITY)[keyof typeof PRIORITY]
 export type PartKind =
   'superchat' | 'guard' | 'dance' | 'song' | 'gift' | 'danmaku' | 'cold' | 'sleep'
 
+/**
+ * Who a line came from, for deciding what a reply to it may ask the tools to do. Missing means `viewer`: a line whose
+ * author nobody vouched for is never more.
+ *   viewer     the audience (chat, paid messages, gifts, guards, and anything made from what they wrote)
+ *   moderator  a room moderator's own chat message
+ *   host       the streamer's own account
+ *   system     written by the program from nothing a viewer wrote (the cold-start line)
+ */
+export type PartRole = 'viewer' | 'moderator' | 'host' | 'system'
+
 /** One line of a batch, with enough provenance for the brain to attach a source record to it. */
 export interface BatchPart {
   prio: Priority
   kind: PartKind
+  /** Left out for a viewer. */
+  role?: Exclude<PartRole, 'viewer'>
   /** The exact line as sent to the brain. */
   text: string
   /** The platform user id, when it is known (zero and missing ids are left out). */

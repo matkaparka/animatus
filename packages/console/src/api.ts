@@ -8,6 +8,8 @@
 import type { z } from 'zod'
 import {
   ApiError,
+  ApprovalView,
+  ApprovalsResponse,
   ConfigResponse,
   EventsResponse,
   MemoryConsolidateReport,
@@ -72,6 +74,10 @@ export interface Api {
   events(limit?: number): Promise<RunEvent[]>
   traces(limit?: number): Promise<SpeechTraceView[]>
   config(): Promise<Record<string, unknown>>
+
+  // approvals: tool calls that wait for the streamer's yes
+  approvals(): Promise<ApprovalsResponse>
+  approvalDecide(id: string, action: 'approve' | 'deny'): Promise<ApprovalView>
 
   // memory (the routes answer `memory_off` when it is switched off, except the status)
   memoryStatus(): Promise<MemoryStatusView>
@@ -273,5 +279,8 @@ export function createApi(options: ApiOptions): Api {
     async config() {
       return (await json(ConfigResponse, 'GET', '/api/config')).config
     },
+    approvals: () => json(ApprovalsResponse, 'GET', '/api/approvals'),
+    approvalDecide: (id, action) =>
+      json(ApprovalView, 'POST', `/api/approvals/${enc(id)}/${action}`),
   }
 }

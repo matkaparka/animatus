@@ -129,6 +129,15 @@ memory:
   recall: { max_lines: 8, max_chars: 900, per_speaker: 5, search_cache_days: 7 }
   consolidate: { every_hours: 0, max_viewers: 30, min_messages: 2, max_facts: 5, stream_notes: true }   # 0 hours: only when asked
 
+# What the model may ask the program to do (docs/tools.md). A tool that changes something waits for your yes in the
+# console's Approvals tab, and a request that comes from what the audience wrote is refused outright.
+tools:
+  enabled: true                    # false: the model is told of no tools and tool blocks in its replies are ignored
+  tiers: {}                        # by tool name: free | approval | disabled, e.g. { remember: disabled }
+  approval_ttl_sec: 600            # a request waits this long for your answer
+  max_pending: 20                  # requests waiting at once
+  per_minute: 20                   # calls one source may ask for per minute
+
 # The graphics memory modes are admitted against.
 vram:
   # budget_mb: 12000               # leave out to read the card's size

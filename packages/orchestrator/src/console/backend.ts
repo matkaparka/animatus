@@ -15,6 +15,8 @@
  *  - Push live events (run lines, traces, alarms, plugin and mode changes) with `server.publish()`.
  */
 import type {
+  ApprovalView,
+  ApprovalsResponse,
   InjectRequest,
   MemoryCommit,
   MemoryConsolidateReport,
@@ -86,9 +88,25 @@ export interface MemoryBackend {
   resolveProposal(id: string, approve: boolean): Awaitable<void>
 }
 
+/**
+ * What the approval routes need: the tool calls waiting for the streamer's yes. Optional on the backend; without it the
+ * list is empty and nothing can be decided.
+ */
+export interface ApprovalsBackend {
+  /** `GET /api/approvals`: what waits, and the last decisions. */
+  list(): Awaitable<ApprovalsResponse>
+  /**
+   * `POST /api/approvals/:id/{approve|deny}`. Approving runs the call now, once, with the arguments as they were
+   * queued. Refuses with 404 what does not exist and 409 what was already decided or has expired.
+   */
+  decide(id: string, action: 'approve' | 'deny'): Awaitable<ApprovalView>
+}
+
 export interface ConsoleBackend {
   /** The memory routes (`/api/memory...`); absent when memory is off. */
   readonly memory?: MemoryBackend
+  /** The approval routes (`/api/approvals...`). */
+  readonly approvals?: ApprovalsBackend
 
   /** `GET /api/status`, and the payload of the `status` event pushed every two seconds. */
   status(): Awaitable<StatusView>

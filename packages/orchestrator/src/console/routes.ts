@@ -30,6 +30,7 @@ import { ApiFailure } from './backend.ts'
 import type { ConsoleBackend } from './backend.ts'
 import { sanitizeConfig } from './config.ts'
 import { clampText, describeIssues } from './http.ts'
+import { APPROVAL_ROUTES } from './routes.approvals.ts'
 import { MEMORY_ROUTES } from './routes.memory.ts'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -279,6 +280,7 @@ export const ROUTES: readonly Route[] = [
     },
   },
   ...MEMORY_ROUTES,
+  ...APPROVAL_ROUTES,
 ]
 
 // ─────────────────────────────── matching ───────────────────────────────

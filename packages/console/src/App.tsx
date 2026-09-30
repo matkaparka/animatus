@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import { ApiClientError, createApi } from './api.ts'
 import type { Api } from './api.ts'
+import { Approvals } from './Approvals.tsx'
 import { Pill } from './components.tsx'
 import { Keys } from './Keys.tsx'
 import { Memory } from './Memory.tsx'
@@ -13,12 +14,13 @@ import { Run } from './Run.tsx'
 import { Settings } from './Settings.tsx'
 import { initialState, reducer } from './state.ts'
 
-type TabId = 'run' | 'plugins' | 'modes' | 'memory' | 'settings' | 'keys'
+type TabId = 'run' | 'plugins' | 'modes' | 'approvals' | 'memory' | 'settings' | 'keys'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string }> = [
   { id: 'run', label: 'Run' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'modes', label: 'Modes' },
+  { id: 'approvals', label: 'Approvals' },
   { id: 'memory', label: 'Memory' },
   { id: 'settings', label: 'Settings' },
   { id: 'keys', label: 'Keys' },
@@ -193,6 +195,8 @@ function Console({
 
   if (conn === 'rejected') return <NoToken rejected />
 
+  const waiting = state.status?.approvals_pending ?? 0
+
   const pages: Record<TabId, ReactNode> = {
     run: (
       <Run
@@ -218,6 +222,13 @@ function Console({
         onChange={(mode) => dispatch({ type: 'mode', mode })}
         onRefresh={(modes) => dispatch({ type: 'modes', modes })}
         {...(state.status?.stage.url ? { assetBase: state.status.stage.url } : {})}
+      />
+    ),
+    approvals: (
+      <Approvals
+        api={api}
+        changes={state.approvalsSeen}
+        onCount={(pending) => dispatch({ type: 'approvals', pending })}
       />
     ),
     memory: <Memory api={api} />,
@@ -252,6 +263,11 @@ function Console({
             onClick={() => select(t.id)}
           >
             {t.label}
+            {t.id === 'approvals' && waiting > 0 ? (
+              <span className="tab-count" title="Waiting for your yes">
+                {waiting}
+              </span>
+            ) : null}
           </button>
         ))}
       </nav>

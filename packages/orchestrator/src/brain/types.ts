@@ -22,7 +22,11 @@ export type SegmenterEvent =
        */
       emotionTagExplicit?: boolean
     }
-  | { kind: 'code'; content: string }
+  /**
+   * `lang` is the word after the opening fence (```tool), left out when there was none. `unterminated` is set when
+   * the stream ended before the closing fence: what is inside may be cut short.
+   */
+  | { kind: 'code'; content: string; lang?: string; unterminated?: true }
 
 export type SpeechEvent = Extract<SegmenterEvent, { kind: 'speech' }>
 

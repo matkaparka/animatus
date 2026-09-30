@@ -21,7 +21,7 @@ modes/<id>/             mode.yaml manifest + Markdown prompts
 personas/example/       generic example persona
 config.example/         example configuration; copy to ./config (git-ignored)
 tools/secret-scan/      pre-commit scanner
-docs/                   protocol, plugins, modes
+docs/                   protocol, plugins, modes, memory, tools, console
 ```
 
 ## Commands

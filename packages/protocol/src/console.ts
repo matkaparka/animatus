@@ -221,6 +221,8 @@ export const StatusView = z.object({
     })
     .optional(),
   alarms: z.array(Alarm),
+  /** Tool calls waiting for the streamer's yes (see approvals.ts). */
+  approvals_pending: z.number().int().min(0).default(0),
 })
 export type StatusView = z.infer<typeof StatusView>
 
@@ -315,6 +317,8 @@ export const ConsoleEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('alarm'), alarm: Alarm }),
   z.object({ type: z.literal('plugin'), plugin: PluginView }),
   z.object({ type: z.literal('mode'), mode: ModeView }),
+  /** The approval list changed (a call was queued, decided or expired): read it again. */
+  z.object({ type: z.literal('approvals'), pending: z.number().int().min(0) }),
 ])
 export type ConsoleEvent = z.infer<typeof ConsoleEvent>
 

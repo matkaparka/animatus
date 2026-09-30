@@ -115,7 +115,7 @@ describe('with a token', () => {
     expect(screen.queryByText(/live connection is down/)).toBeNull()
   })
 
-  it('has six tabs, Run first, and switches between them', async () => {
+  it('has seven tabs, Run first, and switches between them', async () => {
     renderApp()
     await screen.findByRole('heading', { name: 'Stage' })
     const tabs = screen.getAllByRole('tab')
@@ -123,12 +123,14 @@ describe('with a token', () => {
       'Run',
       'Plugins',
       'Modes',
+      'Approvals',
       'Memory',
       'Settings',
       'Keys',
     ])
     expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual([
       'true',
+      'false',
       'false',
       'false',
       'false',
@@ -144,6 +146,29 @@ describe('with a token', () => {
     expect(document.getElementById('panel-plugins')?.hidden).toBe(false)
     // pages nobody has opened are not built yet
     expect(document.getElementById('panel-keys')).toBeNull()
+  })
+
+  it('the Approvals tab shows how many wait, follows the server’s word on changes, and loads its list when opened', async () => {
+    const api = fakeApi({ status: async () => status({ approvals_pending: 2 }) })
+    const { live } = renderApp({ api })
+    const tab = () => screen.getByRole('tab', { name: /^Approvals/ })
+    await waitFor(() =>
+      expect(within(tab()).getByTitle('Waiting for your yes').textContent).toBe('2')
+    )
+    await live.send({ type: 'approvals', pending: 0 })
+    expect(within(tab()).queryByTitle('Waiting for your yes')).toBeNull()
+    await live.send({ type: 'approvals', pending: 5 })
+    expect(within(tab()).getByTitle('Waiting for your yes').textContent).toBe('5')
+
+    expect(api.approvals).not.toHaveBeenCalled() // nobody has opened the page
+    fireEvent.click(tab())
+    expect(await screen.findByRole('heading', { name: 'Approvals', level: 2 })).toBeTruthy()
+    await waitFor(() => expect(api.approvals).toHaveBeenCalledTimes(1))
+    // the page read an empty list: the tab says nothing waits
+    await waitFor(() => expect(within(tab()).queryByTitle('Waiting for your yes')).toBeNull())
+    // and a change announced by the server makes it read again
+    await live.send({ type: 'approvals', pending: 1 })
+    await waitFor(() => expect(api.approvals).toHaveBeenCalledTimes(2))
   })
 
   it('the Plugins and Modes tabs show what the status says', async () => {

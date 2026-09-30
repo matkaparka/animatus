@@ -65,6 +65,8 @@ export class SpeechSegmenter {
   private tagExplicitPending = false
   // True right after a code block opens, until the language line (```js) has been removed.
   private awaitingLangLine = false
+  // The language word of the code block being read ('' when the fence had none).
+  private codeLang = ''
   private hasEmittedSpeech = false
   private readonly firstSpeechCommaMinChars: number
 
@@ -95,8 +97,8 @@ export class SpeechSegmenter {
       }
       this.drainSentences(events, { force: true })
     } else {
-      // The stream ended inside a code block: emit it as code (as the legacy app did).
-      this.emitCode(events, this.codeBuffer)
+      // The stream ended inside a code block: emit it as code (as the legacy app did), marked as cut short.
+      this.emitCode(events, this.codeBuffer, true)
       this.codeBuffer = ''
       this.mode = 'text'
       this.awaitingLangLine = false
@@ -123,6 +125,7 @@ export class SpeechSegmenter {
       this.drainSentences(events, { force: true })
       this.mode = 'code'
       this.codeBuffer = ''
+      this.codeLang = ''
       this.awaitingLangLine = true
       return combined.slice(delimiterIndex + CODE_DELIMITER.length)
     }
@@ -150,6 +153,7 @@ export class SpeechSegmenter {
       // chunking, legacy fix C9).
       const langMatch = this.codeBuffer.match(/^ *(\w+)? *\n/)
       if (langMatch) {
+        this.codeLang = langMatch[1] ?? ''
         this.codeBuffer = this.codeBuffer.slice(langMatch[0].length)
         this.awaitingLangLine = false
       } else if (/^ *(\w*)? *$/.test(this.codeBuffer)) {
@@ -178,10 +182,16 @@ export class SpeechSegmenter {
     return rest
   }
 
-  private emitCode(events: SegmenterEvent[], content: string) {
+  private emitCode(events: SegmenterEvent[], content: string, unterminated = false) {
     if (content.trim()) {
-      events.push({ kind: 'code', content })
+      events.push({
+        kind: 'code',
+        content,
+        ...(this.codeLang ? { lang: this.codeLang } : {}),
+        ...(unterminated ? { unterminated: true as const } : {}),
+      })
     }
+    this.codeLang = ''
   }
 
   private drainSentences(events: SegmenterEvent[], { force = false }: { force?: boolean } = {}) {

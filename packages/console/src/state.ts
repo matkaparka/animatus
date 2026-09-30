@@ -24,9 +24,17 @@ export interface ConsoleState {
   traces: SpeechTraceView[]
   /** Newest first. */
   alarms: Alarm[]
+  /** How many times the server said the approval list changed: a page that shows it reads it again when this moves. */
+  approvalsSeen: number
 }
 
-export const initialState: ConsoleState = { status: null, events: [], traces: [], alarms: [] }
+export const initialState: ConsoleState = {
+  status: null,
+  events: [],
+  traces: [],
+  alarms: [],
+  approvalsSeen: 0,
+}
 
 export type Action =
   | { type: 'event'; event: ConsoleEvent }
@@ -36,6 +44,8 @@ export type Action =
   | { type: 'modes'; modes: ModeView[] }
   | { type: 'mode'; mode: ModeView }
   | { type: 'history'; events: RunEvent[]; traces: SpeechTraceView[] }
+  /** How many tool calls wait for the streamer's yes, as the approvals page has just read it. */
+  | { type: 'approvals'; pending: number }
 
 const eventKey = (e: RunEvent): string => `${e.ts}|${e.kind}|${e.text}`
 
@@ -82,6 +92,10 @@ export function reducer(state: ConsoleState, action: Action): ConsoleState {
       return withStatus(state, (s) => ({ ...s, modes: action.modes }))
     case 'mode':
       return withStatus(state, (s) => ({ ...s, modes: upsertById(s.modes, action.mode) }))
+    case 'approvals':
+      // the page reads the list every so often: the same number again must not redraw everything
+      if (!state.status || state.status.approvals_pending === action.pending) return state
+      return { ...state, status: { ...state.status, approvals_pending: action.pending } }
     case 'history': {
       // What arrived over the socket while the history was loading is newer and must survive.
       const seen = new Set(state.events.map(eventKey))
@@ -119,5 +133,10 @@ function applyEvent(state: ConsoleState, event: ConsoleEvent): ConsoleState {
       return reducer(state, { type: 'plugin', plugin: event.plugin })
     case 'mode':
       return reducer(state, { type: 'mode', mode: event.mode })
+    case 'approvals':
+      return {
+        ...withStatus(state, (s) => ({ ...s, approvals_pending: event.pending })),
+        approvalsSeen: state.approvalsSeen + 1,
+      }
   }
 }

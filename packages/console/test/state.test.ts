@@ -22,7 +22,35 @@ const withStatus = (over: Record<string, unknown> = {}): ConsoleState =>
 
 describe('reducer', () => {
   it('starts empty', () => {
-    expect(initialState).toEqual({ status: null, events: [], traces: [], alarms: [] })
+    expect(initialState).toEqual({
+      status: null,
+      events: [],
+      traces: [],
+      alarms: [],
+      approvalsSeen: 0,
+    })
+  })
+
+  it('an approvals event sets how many wait, and counts as a change for the page that lists them', () => {
+    const state = withStatus()
+    expect(state.status?.approvals_pending).toBe(0)
+    const one = reducer(state, { type: 'event', event: { type: 'approvals', pending: 2 } })
+    expect(one.status?.approvals_pending).toBe(2)
+    expect(one.approvalsSeen).toBe(1)
+    const two = reducer(one, { type: 'event', event: { type: 'approvals', pending: 1 } })
+    expect([two.status?.approvals_pending, two.approvalsSeen]).toEqual([1, 2])
+    // before the first status there is nowhere to put the number, but the change is still counted
+    const early = reducer(initialState, { type: 'event', event: { type: 'approvals', pending: 3 } })
+    expect([early.status, early.approvalsSeen]).toEqual([null, 1])
+  })
+
+  it('the approvals page telling how many wait changes the number and nothing else', () => {
+    const state = withStatus()
+    const next = reducer(state, { type: 'approvals', pending: 4 })
+    expect(next.status?.approvals_pending).toBe(4)
+    expect(next.approvalsSeen).toBe(0)
+    expect(reducer(next, { type: 'approvals', pending: 4 })).toBe(next)
+    expect(reducer(initialState, { type: 'approvals', pending: 4 })).toBe(initialState)
   })
 
   it('a status replaces the last one and brings its alarms in', () => {

@@ -49,6 +49,7 @@ import {
   type InboxConfigInput,
   type InboxLogger,
   type PartKind,
+  type PartRole,
   type Priority,
   type SongCommand,
   type SuperChatInput,
@@ -108,6 +109,7 @@ export interface RouterStats {
 interface Item {
   prio: Priority
   kind: PartKind
+  role?: Exclude<PartRole, 'viewer'>
   ts: number
   text: string
   uid?: number
@@ -141,8 +143,8 @@ function identity(
 }
 
 function toPart(item: Item): BatchPart {
-  const { prio, kind, text, uid, uname } = item
-  return { prio, kind, text, ...identity(uid, uname) }
+  const { prio, kind, role, text, uid, uname } = item
+  return { prio, kind, ...(role ? { role } : {}), text, ...identity(uid, uname) }
 }
 
 function batchOf(parts: BatchPart[]): Batch {
@@ -272,9 +274,11 @@ export class Router {
     if (this.recentText.has(key)) return drop('duplicate')
     this.recentText.set(key, now)
     const shown = truncateChars(text, filter.maxChars)
+    const role = this.roleOf(uid, ev.admin ?? false, ev.roomOwnerUid ?? 0)
     this.push({
       prio: PRIORITY.DANMAKU,
       kind: 'danmaku',
+      ...(role ? { role } : {}),
       ts: now,
       text: FORMATS.danmaku(uname, shown),
       ...identity(uid, uname),
@@ -370,6 +374,16 @@ export class Router {
   addSongLine(text: string): void {
     this.push({ prio: PRIORITY.SONG, kind: 'song', ts: this.now(), text })
     this.log('info', 'queued song line', { text })
+  }
+
+  /** The streamer's own accounts, then room moderators; anyone else is the audience (no role). */
+  private roleOf(
+    uid: number,
+    admin: boolean,
+    roomOwnerUid: number
+  ): 'host' | 'moderator' | undefined {
+    if (this.ownerUids.has(uid) || (Boolean(roomOwnerUid) && uid === roomOwnerUid)) return 'host'
+    return admin ? 'moderator' : undefined
   }
 
   // ---- commands of modes
@@ -598,7 +612,7 @@ export class Router {
       if (idleMinutes >= cold.minutes && (now - this.lastColdAt) / MINUTE_MS >= cold.minutes) {
         this.lastColdAt = now
         const text = FORMATS.cold(Math.trunc(idleMinutes))
-        return batchOf([{ prio: PRIORITY.DANMAKU, kind: 'cold', text }])
+        return batchOf([{ prio: PRIORITY.DANMAKU, kind: 'cold', role: 'system', text }])
       }
     }
     return null
@@ -621,6 +635,7 @@ export class Router {
       {
         prio: item.prio,
         kind: 'sleep',
+        ...(item.role ? { role: item.role } : {}),
         text: FORMATS.sleepPrefix + rest,
         ...identity(item.uid, item.uname),
       },

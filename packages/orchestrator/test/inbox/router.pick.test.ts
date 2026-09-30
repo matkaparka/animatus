@@ -393,7 +393,8 @@ describe('cold start', () => {
     h.clock.advance(1)
     expect(h.router.pick()).toEqual({
       text: '【冷场】已经3分钟没有人发弹幕了',
-      parts: [{ prio: 4, kind: 'cold', text: '【冷场】已经3分钟没有人发弹幕了' }],
+      // written by the program from nothing a viewer wrote: the role says so (see PartRole)
+      parts: [{ prio: 4, kind: 'cold', role: 'system', text: '【冷场】已经3分钟没有人发弹幕了' }],
     })
     expect(h.router.pick()).toBeNull() // just spoke
     h.clock.advance(3 * MIN - 1)

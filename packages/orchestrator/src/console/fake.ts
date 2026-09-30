@@ -9,6 +9,7 @@
 import { ModeView, PluginView, StatusView } from '@animatus/protocol'
 import type {
   Alarm,
+  ApprovalView,
   ConsoleEvent,
   InjectRequest,
   ModeAction,
@@ -21,7 +22,7 @@ import type {
   VerdictView,
 } from '@animatus/protocol'
 import { ApiFailure } from './backend.ts'
-import type { ConsoleBackend } from './backend.ts'
+import type { ApprovalsBackend, ConsoleBackend } from './backend.ts'
 
 export interface FakeBackendOptions {
   /** Clock. Default `Date.now`. */
@@ -87,6 +88,8 @@ export class FakeBackend implements ConsoleBackend {
   private readonly alarms: Alarm[] = []
   private readonly listeners = new Set<(event: ConsoleEvent) => void>()
   private readonly timers = new Set<NodeJS.Timeout>()
+  private readonly pendingApprovals: ApprovalView[] = []
+  private readonly decidedApprovals: ApprovalView[] = []
   private utterances: Utterance[] = []
   private nextPid = 5000
   private nextId = 1
@@ -101,6 +104,7 @@ export class FakeBackend implements ConsoleBackend {
     this.seedModes(now)
     this.seedSecrets()
     this.seedAlarms(now)
+    this.seedApprovals(now)
     this.pushRun('system', 'demo backend ready (all data here is made up)')
     this.pushRun('viewer', 'amber_fox: hello!', 'untrusted')
   }
@@ -220,7 +224,35 @@ export class FakeBackend implements ConsoleBackend {
       },
       vram: { adapter: 'Example GPU (made up)', budgetMb: BUDGET_MB, usedMb: 3900 },
       alarms: this.alarms.map(clone),
+      approvals_pending: this.pendingApprovals.length,
     })
+  }
+
+  /** Two requests waiting, as if a moderator and the streamer had asked; deciding moves them to the recent list. */
+  readonly approvals: ApprovalsBackend = {
+    list: () => {
+      this.audit.push({ op: 'approvals' })
+      return {
+        pending: this.pendingApprovals.map(clone),
+        recent: [...this.decidedApprovals].reverse().map(clone),
+      }
+    },
+    decide: (id, action) => {
+      this.audit.push({ op: 'approvals.' + action, target: id })
+      const at = this.pendingApprovals.findIndex((a) => a.id === id)
+      if (at < 0) {
+        const seen = this.decidedApprovals.find((a) => a.id === id)
+        if (!seen) throw new ApiFailure('approval_not_found', 'there is no such request', 404)
+        throw new ApiFailure('approval_not_pending', 'that request was already ' + seen.status, 409)
+      }
+      const [view] = this.pendingApprovals.splice(at, 1) as [ApprovalView]
+      view.status = action === 'approve' ? 'approved' : 'denied'
+      view.decided_at = this.now()
+      if (action === 'approve') view.result = 'done (demo)'
+      this.decidedApprovals.push(view)
+      this.emit({ type: 'approvals', pending: this.pendingApprovals.length })
+      return clone(view)
+    },
   }
 
   listPlugins(): PluginView[] {
@@ -623,6 +655,32 @@ export class FakeBackend implements ConsoleBackend {
       hotkey: 'ctrl+alt+n',
       admission: fits(3300, true),
     })
+  }
+
+  private seedApprovals(now: number): void {
+    const base = {
+      status: 'pending' as const,
+      requested_at: now - 20_000,
+      expires_at: now + 580_000,
+    }
+    this.pendingApprovals.push(
+      {
+        ...base,
+        id: 'ap-0000000000a1',
+        tool: 'enter_mode',
+        summary: 'Start the mode "sing"',
+        args: { mode: 'sing' },
+        origin: { kind: 'moderator', trust: 'trusted', name: 'night_owl' },
+      },
+      {
+        ...base,
+        id: 'ap-0000000000a2',
+        tool: 'remember',
+        summary: 'Remember: the channel mascot is a red panda',
+        args: { text: 'the channel mascot is a red panda' },
+        origin: { kind: 'host', trust: 'privileged', name: 'streamer' },
+      }
+    )
   }
 
   private seedSecrets(): void {

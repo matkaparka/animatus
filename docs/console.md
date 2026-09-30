@@ -128,6 +128,7 @@ arrays; single resources come back as themselves.
 | `GET /api/plugins/:id/logs?lines=N` | | `text/plain`, one log line per line; `N` defaults to 200, at most 1000; lines are cut at 4000 characters |
 | `GET /api/modes` | | `{ modes: ModeView[] }` |
 | `GET /api/memory`, `GET /api/memory/tree`, `GET|PUT /api/memory/file`, `POST /api/memory/line`, `GET /api/memory/history`, `GET /api/memory/diff`, `POST /api/memory/rollback`, `POST /api/memory/forget`, `POST /api/memory/consolidate`, `GET /api/memory/proposals`, `POST /api/memory/proposals/:id/approve` and `/reject` | see [memory.md](memory.md) and `packages/protocol/src/memory.ts` | `{ enabled: false }` from the status and `memory_off` (409) from the rest when `memory.enabled` is off; a write says the hash it is based on and a stale one is a 409 `conflict`; the streamer's rules refuse with 403 (`forbidden`, `locked`, `human_wins`) |
+| `GET /api/approvals`, `POST /api/approvals/:id/approve` and `/deny` | none | `{ pending, recent }`; a decision returns the request as it is afterwards. 404 `approval_not_found`, 409 `approval_not_pending` (already decided) or `approval_expired`. See [tools.md](tools.md) |
 | `POST /api/modes/:id/enter`, `/exit`, `/act` | optional `ModeRequest`: `replace`, `force`, and `params` (up to 16 string, number or boolean details that the mode's own code understands: which dance, tuning numbers; anything it does not know is ignored) | `ModeView` after the action; a refusal is a 409 whose message says why |
 | `GET /api/secrets` | | `{ secrets: SecretView[] }`: names, `set`, `source` |
 | `PUT /api/secrets/:name` | `SecretPut` | `SecretView` |
@@ -167,7 +168,7 @@ is never echoed. Messages are `ConsoleEvent`s:
 |---|---|
 | `hello` | on connect, first |
 | `status` | right after `hello`, then every 2 seconds |
-| `run`, `trace`, `alarm`, `plugin`, `mode` | whatever the backend passes to `server.publish()`; invalid events are refused and logged |
+| `run`, `trace`, `alarm`, `plugin`, `mode`, `approvals` | whatever the backend passes to `server.publish()`; invalid events are refused and logged. `approvals` carries how many requests now wait for the streamer |
 
 Anything a client sends is ignored, and a frame over 4 KiB closes the socket (1009). Protocol-level pings are
 answered; the server pings every 15 seconds and drops a client that does not answer. A client that falls a
@@ -191,6 +192,7 @@ usable at phone width. Everything is rendered as text nodes; there is no `danger
 |---|---|
 | Run | Status cards (stage, audio and AudioContext counts, frame rate, underruns, T-pose frames, speech, GPU memory, language models), alarms, the live event stream (audience lines carry an "untrusted" badge), the speech trace table, a form to make the character say a line, a button to stop speech, and a form to inject a fake audience event |
 | Plugins | Status, pid, restarts, health, GPU memory estimate against measurement ("not measured" for a missing figure), start / stop / restart, a logs drawer |
+| Approvals | Tool calls the character asked for that change something, waiting for your yes: the tool's own summary, who asked and with what trust, the arguments as they will be run, how long it still waits, Approve and Deny; below, the last decisions. A count on the tab says how many wait. What the audience wrote never gets into this list ([tools.md](tools.md)) |
 | Memory | Status (files, facts, inbox, recall time, last consolidation), the files by section, a file line by line with its source and lock (edit, lock, remove, add, new file), the history of a file with the changes of a commit and "restore this version", the program's proposals to approve or refuse, forgetting a viewer, "Consolidate now". Off: a note that says how to turn it on |
 | Modes | One card per mode: state, priority, exclusions, services, the admission verdict, pairs that do not fit. Enter is disabled, with the reason as its tooltip and as visible text, when the verdict is no; an option replaces conflicting modes. Below that, the mode's own panel when it has one (`ModeView.panel`, drawn from data: a status line, facts, a picture, buttons with inputs, lists whose rows have buttons; the dance mode lists its dances with play and trial buttons, tuning fields and a stop button). A button sends `POST /api/modes/:id/act` with `params.action` set to its id, `params.row` for a row button, and one param per input; the panel is refreshed with every status push |
 | Settings | Read-only, collapsible view of `/api/config`. Editing comes later |

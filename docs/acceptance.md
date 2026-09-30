@@ -125,6 +125,41 @@ measured number.
 - Not done: an embedding model for recall (keyword search only); memory facts from other modes (a song a viewer asked
   for); a soak of the consolidation pass against a real model on a real stream's inbox.
 
+## P5: tools, approvals, injection
+
+Pass criteria (brief section 12): a set of chat injections is all stopped, and the audience cannot trigger a
+high-privilege tool. The first half of P5 (the tool gate and the approval desk) is done; automations, the safety
+observer as its own part and the unified worker protocol are not yet.
+
+- **The injection suite** (`test/app/tools.test.ts`, 22 tests, about 17 s) runs the real program: real inbox, brain,
+  tool gate, modes, memory and console backend, with only the model, the voice and the stage page scripted. The model
+  is scripted to be *compromised*: whenever the last message holds a trigger word it obeys, and asks for a mode
+  to be started, ended and a false fact to be remembered, all in one reply. Results: a viewer's message gets all three
+  refused (`untrusted_origin`), none queued, no mode entered, no memory file written, and three lines in the audit
+  trail on disk; the same for a flood of messages from six different viewers, for a viewer who claims to be a
+  moderator (in words and with the markers), for a moderator's line and a viewer's line in the same batch (the whole
+  reply counts as the audience's), for a tool that does not exist, is switched off or has bad arguments, and for a
+  fence typed in chat (nothing reads it). The model is told only that a call was "not allowed here".
+- **The ways in that used to be trusted** are closed: a mode's `tellBrain` is untrusted unless the mode says the
+  text is the program's own words (and never with pictures); the answer to "forget me" carries the viewer's name and
+  is untrusted.
+- **Staff can ask, the streamer decides.** A moderator's or the streamer's request is queued and nothing runs
+  before the console says yes; approving runs the stored arguments once (a second approval and an approval after a
+  denial are 409), the tool's own summary is what the console shows, and the model hears the outcome on its next
+  reply. A stage page cannot approve or queue anything whatever it sends, and words in chat cannot either.
+- **The tests have teeth.** With the gate changed to treat every origin as privileged, 9 of the 22 fail; with the
+  turn's trust taken from the strongest line instead of the weakest, the mixed-batch test fails; with `tellBrain`
+  or the "forget me" answer made privileged, their tests fail.
+- **Console:** the approval routes over the real server and the real gate (11 tests: token, other origin, ids, methods,
+  one decision only, the event pushed to open consoles, a queued call listed with its summary and run once) and the
+  page (10 tests, and the tab count in the app).
+- **Not done, and not verified:** none of this has run against a real model, so how often a real model asks for a tool
+  when it should not, or does not when it should, is unknown; the prompt block that tells the model about tools is
+  untested with a real one. Approving in the real console page has not been clicked through by hand yet.
+- **Known limit** (written in [tools.md](tools.md)): the gate cannot tell whether a moderator's own request is what they
+  meant, and a model steered by the audience earlier in the conversation can misjudge a later moderator request; the
+  streamer's yes is the safeguard for both.
+
 ## P0
 
 VRAM measurements are in [vram-measurements.md](vram-measurements.md).

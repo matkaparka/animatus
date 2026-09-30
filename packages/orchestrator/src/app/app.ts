@@ -24,6 +24,7 @@ import type {
   StatusView,
 } from '@animatus/protocol'
 import { CameraAdjust, NO_CAMERA_ADJUST, trustFor } from '@animatus/protocol'
+import type { EventSource, ToolAuditEntry } from '@animatus/protocol'
 import { Brain } from '../brain/brain.ts'
 import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
@@ -75,6 +76,12 @@ import { loadMeasurements } from '../modes/measurements.ts'
 import { ModeService } from '../modes/service.ts'
 import { composeStage, resolveModeStage } from '../modes/stageProfile.ts'
 import type { ComposedStage, ModeStage } from '../modes/stageProfile.ts'
+import { createAuditSink } from '../tools/audit.ts'
+import type { AuditSink } from '../tools/audit.ts'
+import { registerBuiltinTools } from '../tools/builtin.ts'
+import { ToolGate } from '../tools/gate.ts'
+import { originOfBatch } from '../tools/origin.ts'
+import { ToolRegistry } from '../tools/registry.ts'
 
 /** Names the console's key page and `${secret:x}` references know, and the variables they are read from. */
 export const WELL_KNOWN_SECRETS: Readonly<Record<string, string>> = {
@@ -148,6 +155,11 @@ export class App {
   readonly modes: ModeService
   /** What the character remembers between streams; null when `memory.enabled` is off. */
   readonly memory: MemoryService | null
+  /** Every tool the model asks for goes through this and nothing else (see `tools/gate.ts`). */
+  readonly tools: ToolGate
+  private readonly toolAudit: AuditSink
+  /** What became of the tools the model asked for, told to it at the start of its next reply. */
+  private toolNotes: string[] = []
   private libraryDirs: Readonly<Record<string, string>> = {}
   private measurements: VramMeasurement[] = []
   private measurementTimer: NodeJS.Timeout | null = null
@@ -257,6 +269,18 @@ export class App {
       resolveMotion: (tag) => this.motions?.pick(tag) ?? null,
       modePrompts: () => this.modes.prompts(),
       memory: (input) => this.memory?.recall(input.text, input.viewers ?? []) ?? [],
+      ...(config.tools.enabled
+        ? {
+            tools: (input) =>
+              this.tools.usableBy(input.trust).map((t) => ({
+                name: t.name,
+                description: t.description,
+                usage: t.usage,
+                approval: this.tools.tierOf(t.name) === 'approval',
+              })),
+            notes: () => this.takeToolNotes(),
+          }
+        : {}),
       historyMessages: config.llm.history_messages,
       firstCommaMinChars: config.speech.first_comma_min_chars,
       ...(config.llm.temperature !== undefined ? { temperature: config.llm.temperature } : {}),
@@ -290,9 +314,10 @@ export class App {
                 : {}),
             }),
           isSensitive: (text) => filter.contains(text),
+          // the text carries a viewer's name: it is not the program's own words, so it is not trusted
           tell: (text) =>
             void this.brain
-              .respond({ text, source: 'system', trust: 'privileged' })
+              .respond({ text, source: 'system', trust: 'untrusted' })
               .catch((e) => this.logger('error', `brain: ${firstLine(e)}`)),
           alarm: (code, message) => void this.alarms.raise(code, 'warn', message, 'memory'),
           clearAlarm: (code) => void this.alarms.clear(code, 'memory'),
@@ -364,6 +389,51 @@ export class App {
       resident: config.vram.resident,
       log: (level, msg, extra) =>
         this.logger(level, msg, extra as Record<string, unknown> | undefined),
+    })
+
+    // ── tools
+    this.toolAudit = createAuditSink(
+      path.join(config.paths.data_dir, 'tool-audit.jsonl'),
+      (level, msg) => this.logger(level, msg)
+    )
+    const toolRegistry = new ToolRegistry()
+    const mem2 = this.memory
+    registerBuiltinTools(toolRegistry, {
+      noteToStreamer: (text, origin) => this.noteToStreamer(text, origin),
+      ...(mem2
+        ? {
+            remember: async (text: string) => {
+              const r = await mem2.store.append(
+                'world/agent-notes.md',
+                { source: 'agent', text },
+                { author: 'agent', header: '# What the character noted down' }
+              )
+              if (!r.ok) throw new Error(r.message)
+              return r.duplicate ? ('already there' as const) : ('written' as const)
+            },
+          }
+        : {}),
+      modes: {
+        has: (id) => this.modes.has(id),
+        enter: async (id) => {
+          const v = await this.modeAction(id, 'enter', { replace: false, force: false })
+          // a mode may start only once the speech is quiet, so "not yet" is a fair answer
+          return `asked "${id}" to start; it is ${v.state} now`
+        },
+        exit: async (id) => {
+          const v = await this.modes.exit(id, 'tool')
+          return `asked "${id}" to end; it is ${v.state} now`
+        },
+      },
+    })
+    this.tools = new ToolGate({
+      registry: toolRegistry,
+      tiers: config.tools.tiers,
+      ttlMs: config.tools.approval_ttl_sec * 1000,
+      maxPending: config.tools.max_pending,
+      perMinute: config.tools.per_minute,
+      audit: (entry) => this.onToolAudit(entry),
+      now: this.now,
     })
 
     this.wire()
@@ -567,6 +637,18 @@ export class App {
     })
     this.brain.on('motion.unknown', (m) =>
       this.runLog.add('llm', `motion tag "${m.tag}" names no clip`)
+    )
+    this.brain.on('tool.call', (c) => {
+      // the gate never throws; the outcome reaches the console, the audit trail and the model's next reply through onToolAudit
+      void this.tools.request({
+        tool: c.tool,
+        args: c.args,
+        origin: c.origin,
+        turnId: c.turnId,
+      })
+    })
+    this.brain.on('tool.ignored', (c) =>
+      this.runLog.add('tool', `a tool block in the reply was not taken (${c.reason})`)
     )
     this.brain.on('error', (e) => {
       const why = describeLlmError(e)
@@ -802,15 +884,57 @@ export class App {
       this.logger('error', `modes: ${(e as Error).message}`)
     }
     const viewers = this.recordBatch(batch)
+    // the reply is judged by its least trusted line: what the audience wrote among a moderator's lines makes it an audience reply
+    const origin = originOfBatch(batch.parts)
     await this.brain
       .respond({
         text,
-        source: 'viewer',
-        trust: 'untrusted',
+        source: origin.kind === 'moderator' || origin.kind === 'host' ? origin.kind : 'viewer',
+        trust: origin.trust,
+        origin,
         ...(extras.length > 0 ? { extras } : {}),
         ...(viewers.length > 0 ? { viewers } : {}),
       })
       .catch((e) => this.logger('error', `brain: ${(e as Error).message}`))
+  }
+
+  // ───────────────────────────── tools ─────────────────────────────
+
+  /** A private note for the streamer: a line in the run log and a quiet alarm in the console. Nothing is spoken. */
+  private noteToStreamer(text: string, origin: EventSource): void {
+    const who = origin.name ? `${origin.kind} ${origin.name}` : origin.kind
+    this.runLog.add('tool', `note for you (${who}): ${text}`, origin.trust)
+    this.alarms.raise('agent_note', 'info', text, 'note')
+  }
+
+  /** The gate decided something: the run log, the trail on disk, and a line for the model's next reply. */
+  private onToolAudit(e: ToolAuditEntry): void {
+    this.toolAudit.write(e)
+    const who = e.origin.name ? `${e.origin.kind} ${e.origin.name}` : e.origin.kind
+    const line = `${e.decision} ${e.tool}${e.reason ? ` (${e.reason})` : ''} from ${who}`
+    this.runLog.add('tool', line, e.origin.trust)
+    const note = toolNote(e)
+    if (note) {
+      this.toolNotes.push(note)
+      if (this.toolNotes.length > 8) this.toolNotes.splice(0, this.toolNotes.length - 8)
+    }
+  }
+
+  /** The notes for the next reply, once: what became of the tools it asked for since. */
+  private takeToolNotes(): string[] {
+    if (this.toolNotes.length === 0) return []
+    const lines = this.toolNotes
+    this.toolNotes = []
+    return [
+      'What became of the tools you asked for (from the program, not from viewers):\n' +
+        lines.map((l) => `- ${l}`).join('\n'),
+    ]
+  }
+
+  /** Called when a tool call is queued, decided or expires. Returns the unsubscribe. */
+  onApprovalsChange(fn: () => void): () => void {
+    this.tools.on('change', fn)
+    return () => void this.tools.off('change', fn)
   }
 
   /**
@@ -1002,7 +1126,8 @@ export class App {
         await this.brain.respond({
           text,
           source: 'system',
-          trust: 'privileged',
+          // untrusted unless the mode says the text is the program's own words (see ModeHost.tellBrain)
+          trust: opts?.fromProgram === true && !opts.images ? 'privileged' : 'untrusted',
           ...(opts?.extras ? { extras: opts.extras } : {}),
           ...(opts?.images ? { images: opts.images } : {}),
           ...(opts?.preempt ? { preempt: true } : {}),
@@ -1432,6 +1557,7 @@ export class App {
     if (this.measurementTimer) clearInterval(this.measurementTimer)
     await this.modes.dispose()
     await this.memory?.stop().catch(() => undefined)
+    await this.toolAudit.flush()
     this.gpu.stop()
     this.director.dispose()
     for (const d of this.disposers.splice(0)) d()
@@ -1472,6 +1598,35 @@ function describeLlmError(e: Error): string {
 /** First line of an error's message, for log lines that must stay one line. */
 const firstLine = (e: unknown): string =>
   (e instanceof Error ? e.message : String(e)).split(/\r?\n/, 1)[0] ?? ''
+
+/**
+ * What the model is told next turn about a decision of the tool gate. A refusal says only that it was refused and, for
+ * the reasons it can do something about, why: it must not turn into a way to learn how the gate works from the outside.
+ */
+function toolNote(e: ToolAuditEntry): string | null {
+  const name = e.tool
+  switch (e.decision) {
+    case 'ran':
+      return `${name}: done${e.reason ? ` (${e.reason})` : ''}`
+    case 'queued':
+      return `${name}: waiting for the streamer's yes`
+    case 'approved':
+      return `${name}: the streamer said yes${e.reason ? ` (${e.reason})` : ''}`
+    case 'denied':
+      return `${name}: the streamer said no`
+    case 'expired':
+      return `${name}: nobody answered in time, dropped`
+    case 'failed':
+      return `${name}: it did not work${e.reason ? ` (${e.reason})` : ''}`
+    case 'rejected': {
+      const why = (e.reason ?? '').split(':')[0]
+      if (why === 'bad_args') return `${name}: the arguments were not valid`
+      if (why === 'unknown_tool') return `${name}: there is no such tool`
+      if (why === 'rate_limited') return `${name}: too many requests, wait a bit`
+      return `${name}: not allowed here`
+    }
+  }
+}
 
 /** The secret store the operator's keys live in: Windows DPAPI first (writable), then config/.env, then the environment. */
 export function createSecretStore(
