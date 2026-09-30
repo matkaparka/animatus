@@ -119,8 +119,12 @@ plugins:
     config:
       settings_file: C:/path/to/forge-settings.yaml   # start from plugins/forge/settings.example.yaml
       max_long_side: 1024          # multiple of 64, 512 to 2048; the console panel can change it
-  singing:
+  singing:                         # prepares the songs viewers ask for (docs/mode-sing.md); starts with the program, keeps the queue
     enabled: false
+    config:
+      python: C:/path/to/audio-env/python.exe      # has PyYAML, numpy, scipy, soundfile and audio-separator
+      songs_dir: C:/path/to/songs                  # must be the same folder as paths.songs
+      settings: C:/path/to/singing.yaml            # start from plugins/singing/settings.example.yaml
 
 # Modes take over the stream for a while. Every mode is off until you switch it on here; the folders under
 # modes/ say which exist, and the console's Modes page shows which of them fit in GPU memory right now.
@@ -135,6 +139,9 @@ modes:
   sleep:                           # a long whisper track, a calm look, rare whispered replies (docs/mode-sleep.md)
     enabled: false                 # needs paths.asmr, a `whisper` entry in tts.styles and the `night` background above
     config: {}                     # volume, fade_in_s, fade_s, shuffle, loop, captions, ... all optional
+  sing:                            # sings the songs viewers ask for ("点歌 …") with the lyrics on screen (docs/mode-sing.md)
+    enabled: false                 # needs paths.songs and plugins.singing
+    config: {}                     # poll_sec, start_timeout_sec, outro, lyrics, credit, announce_failures ... all optional
   draw:                            # draws what a viewer asks for ("画 …") on your own Forge, all-ages (docs/mode-draw.md)
     enabled: false                 # needs plugins.forge and a model that accepts pictures; routes.default.checkpoints is the one required setting
     config:

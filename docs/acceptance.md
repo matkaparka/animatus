@@ -124,6 +124,19 @@ Not yet done: nothing for P2.
 - A picture sent to the model can carry writing, so `tellBrain` with pictures is untrusted whatever the mode
   says (see P5).
 
+## Sing mode and the singing service (docs/mode-sing.md)
+
+- **Tested:** 247 Python tests (with fakes for the song source, the runner, the clock and a fake NetEase server, and one real
+  process) and 109 TypeScript tests (the typed client, the controller through the mode service with a fake song service, the
+  panel, alarms, the failure lines, restarts, the mode through the whole application with a scripted stage page, and six that
+  run the real Python service under the real supervisor with the mode's own client). Found and fixed: the service lost its
+  413 answer to a reset connection when the caller was still sending (3 of 10 runs), and a non-numeric Content-Length dropped
+  the connection.
+- **Not verified:** real audio-separator, Applio and RVC, GPU use and memory, a real NetEase API server, the real stage page
+  playing the tracks and lyrics (only a scripted page), real chat, loudness (only synthetic signals), killing a real tree of
+  child processes. Graphics memory is not measured, and the pack lists no required service, so admission does not see the
+  singing service's memory (the pack excludes the other modes that use the GPU).
+
 ## Draw mode and the Forge service (docs/mode-draw.md)
 
 - **Tested:** 125 Python tests (the service against a fake Forge and a fake rating model, and as a real process) and

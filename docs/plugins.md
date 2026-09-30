@@ -93,6 +93,7 @@ setting that must survive a restart.
 | Plugin | Kind | What |
 |---|---|---|
 | `gptsovits`, `gptsovits-attach` | speech | GPT-SoVITS started by the program, or one already running |
+| `singing` | custom | keeps the song queue and prepares each song: finds it, separates the vocals, converts the voice, mixes; the sing mode's service ([mode-sing.md](mode-sing.md)). It starts with the program, not with the mode, because it holds the queue |
 | `forge` | image | asks your own Forge (Stable Diffusion WebUI) for a picture under a strict rating policy; the draw mode's service ([mode-draw.md](mode-draw.md)) |
 | `screencap` | capture | copies one window as a picture for the commentary mode; Windows only, loopback only ([mode-commentary.md](mode-commentary.md)) |
 
