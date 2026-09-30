@@ -176,6 +176,21 @@ describe('GeminiProvider request', () => {
     expect(srv.seen[3]!.json.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
   })
 
+  it('sends thinkingLevel (the Gemini 3 family rejects a budget of 0), and refuses it together with a budget', async () => {
+    const srv = await startServer(replying(gDone('ok')))
+    await collect(make(srv.url, { thinkingLevel: 'minimal' }).stream(ask()))
+    await collect(make(srv.url, { thinkingLevel: 'high', includeThoughts: true }).stream(ask()))
+    expect(srv.seen[0]!.json.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'minimal' })
+    expect(srv.seen[1]!.json.generationConfig.thinkingConfig).toEqual({
+      thinkingLevel: 'high',
+      includeThoughts: true,
+    })
+    expect(() => make(srv.url, { thinkingLevel: 'minimal', thinkingBudget: 0 })).toThrow(
+      LlmConfigError
+    )
+    expect(() => make(srv.url, { thinkingLevel: 'extreme' as never })).toThrow(LlmConfigError)
+  })
+
   it('merges the generationConfig escape hatch under the explicit fields', async () => {
     const srv = await startServer(replying(gDone('ok')))
     const p = make(srv.url, { temperature: 0.5, generationConfig: { topP: 0.8, temperature: 2 } })

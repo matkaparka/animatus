@@ -117,6 +117,8 @@ export interface LlmAttempt {
   outcome: 'error' | 'cooldown'
   code: LlmErrorCode
   status?: number
+  /** What the provider said about the failure, scrubbed of secrets (at most 300 characters), for the operator. */
+  detail?: string
   /** For `cooldown`: milliseconds until the provider is tried again. */
   remainingMs?: number
 }

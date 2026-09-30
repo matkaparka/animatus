@@ -51,6 +51,11 @@ export interface GeminiConfig {
   temperature?: number
   /** `generationConfig.thinkingConfig.thinkingBudget`. `0` turns thinking off (lower latency). */
   thinkingBudget?: number
+  /**
+   * `generationConfig.thinkingConfig.thinkingLevel`, for the Gemini 3 family, which answers a `thinkingBudget` of 0
+   * with HTTP 400 ("Request contains an invalid argument"). `minimal` is the lowest-latency setting.
+   */
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
   /** Ask for thought summaries; they become `thinking` deltas. Ignored when `thinkingBudget` is 0. */
   includeThoughts?: boolean
   /** Send `BLOCK_NONE` for the four adjustable harm categories. */
@@ -235,6 +240,18 @@ export class GeminiProvider implements LlmProvider {
     if (config.thinkingBudget !== undefined && !Number.isFinite(config.thinkingBudget)) {
       throw new LlmConfigError(`gemini provider '${config.id}': thinkingBudget must be a number`)
     }
+    if (config.thinkingLevel !== undefined) {
+      if (!['minimal', 'low', 'medium', 'high'].includes(config.thinkingLevel)) {
+        throw new LlmConfigError(
+          `gemini provider '${config.id}': thinkingLevel must be minimal, low, medium or high`
+        )
+      }
+      if (config.thinkingBudget !== undefined) {
+        throw new LlmConfigError(
+          `gemini provider '${config.id}': use thinkingLevel or thinkingBudget, not both`
+        )
+      }
+    }
 
     this.id = config.id
     this.#apiKey = apiKey
@@ -330,6 +347,7 @@ export class GeminiProvider implements LlmProvider {
     if (req.maxOutputTokens !== undefined) generationConfig.maxOutputTokens = req.maxOutputTokens
     const thinking: Rec = {}
     if (cfg.thinkingBudget !== undefined) thinking.thinkingBudget = cfg.thinkingBudget
+    if (cfg.thinkingLevel !== undefined) thinking.thinkingLevel = cfg.thinkingLevel
     if (cfg.includeThoughts && cfg.thinkingBudget !== 0) thinking.includeThoughts = true
     if (Object.keys(thinking).length > 0) generationConfig.thinkingConfig = thinking
 

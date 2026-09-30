@@ -194,7 +194,7 @@ describe('secrets in the configuration', () => {
       model: 'gem',
       api_key: '${secret:gemini}',
       proxy: 'http://127.0.0.1:7897',
-      thinking_budget: 0,
+      thinking_level: 'minimal',
       generation_config: { top_k: 5, snake_case_key: true },
       timeout_ms: 20000,
     }
@@ -204,7 +204,7 @@ describe('secrets in the configuration', () => {
       model: 'gem',
       apiKey: 'AIza-test-value',
       proxy: 'http://127.0.0.1:7897',
-      thinkingBudget: 0,
+      thinkingLevel: 'minimal',
       generationConfig: { top_k: 5, snake_case_key: true },
       timeoutMs: 20000,
     })

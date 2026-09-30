@@ -42,13 +42,19 @@ Evidence so far:
   First sentence of a reply: 0.85 to 1.6 s after it was queued once the synthesiser is warm, and about 7 s for
   the very first one after start-up (the synthesiser compiles kernels on first use), which is why it is warmed
   up before it is attached and why the pacer holds the audience's messages until then.
+- **With a real model.** The same chain with Gemini (`gemini-3.5-flash-lite` through the proxy the machine needs,
+  `thinking_level: minimal`): four audience events, four replies (emotion and motion tags, subtitles, speech), no
+  alarms. Time to the first visible text 1.6 to 3.1 s, whole reply 1.7 to 3.2 s. The legacy stream's own round
+  logs (1,231 replies, same model) show a median of 2.0 s to first text (p90 3.5 s) and 2.4 s in total (p90 4.0 s),
+  so the new path is in the same range on this small sample. The first attempt failed loudly with HTTP 400: the
+  Gemini 3 family rejects `thinkingBudget: 0`; the alarm now carries the provider's own words and there is a
+  `thinking_level` setting.
 - **Automated tests** cover the app end to end with a real stage server and a scripted page, including the
   failure paths: model failure, one sentence that cannot be synthesised, stage disconnect, no model provider,
   missing key, speech service warming up, speech service that stops answering.
 
 Not yet done:
 
-- A run with a real language model (needs the operator's key in `config/.env` or the console).
 - The console wired to the real backend (the server and UI exist and are tested against a fake one).
 - A 30-minute chat soak through the whole chain.
 

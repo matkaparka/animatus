@@ -256,6 +256,7 @@ export class LlmGateway {
             outcome: 'error',
             code: err.code,
             ...(err.status !== undefined ? { status: err.status } : {}),
+            detail: this.#scrub(err.message).slice(0, 300),
           })
           this.#emit('warn', 'llm provider failed', {
             provider: id,

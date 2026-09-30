@@ -123,11 +123,13 @@ describe('LlmGateway fallback', () => {
     expect(error.message).toBe(
       'all LLM providers failed: a=quota (HTTP 429), b=timeout, c=auth (HTTP 401)'
     )
-    expect(error.attempts).toEqual([
+    expect(error.attempts).toMatchObject([
       { providerId: 'a', outcome: 'error', code: 'quota', status: 429 },
       { providerId: 'b', outcome: 'error', code: 'timeout' },
       { providerId: 'c', outcome: 'error', code: 'auth', status: 401 },
     ])
+    // what each provider said travels with the attempt, so the operator sees more than a code
+    for (const a of error.attempts ?? []) expect(a.detail).toBeTypeOf('string')
     expect([a.calls, b.calls, c.calls]).toEqual([1, 1, 1])
   })
 

@@ -98,6 +98,34 @@ describe('a chat message becomes speech', () => {
 })
 
 describe('failures are loud, not silent, and not fatal', () => {
+  it("the alarm for a model failure says why, in the provider's own words, not only which provider failed", async () => {
+    const r = await rig()
+    r.llm.reply = () => {
+      const summary = new LlmError(
+        'unavailable',
+        'all LLM providers failed: primary=bad_request (HTTP 400)',
+        { providerId: 'gateway' }
+      )
+      summary.attempts = [
+        {
+          providerId: 'primary',
+          outcome: 'error',
+          code: 'bad_request',
+          status: 400,
+          detail: 'Gemini HTTP 400 INVALID_ARGUMENT: Request contains an invalid argument.',
+        },
+      ]
+      return [summary]
+    }
+    await r.connect()
+    await until(() => r.app.stage.hub.connected)
+    r.bili.emit(danmaku('anything at all'))
+    await until(() => r.app.alarms.has('llm_failed'), 4000, 'llm alarm')
+    const alarm = r.app.alarms.list().find((a) => a.code === 'llm_failed')
+    expect(alarm?.message).toContain('primary=bad_request (HTTP 400)')
+    expect(alarm?.message).toContain('Request contains an invalid argument')
+  })
+
   it('a model failure raises an alarm, says nothing, and the next message works', async () => {
     const r = await rig()
     let calls = 0

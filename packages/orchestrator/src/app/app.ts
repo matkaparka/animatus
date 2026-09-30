@@ -434,8 +434,9 @@ export class App {
       this.runLog.add('llm', `motion tag "${m.tag}" names no clip`)
     )
     this.brain.on('error', (e) => {
-      this.runLog.add('llm', `reply failed: ${e.message}`)
-      this.alarms.raise('llm_failed', 'error', `the model could not answer: ${e.message}`)
+      const why = describeLlmError(e)
+      this.runLog.add('llm', `reply failed: ${why}`)
+      this.alarms.raise('llm_failed', 'error', `the model could not answer: ${why}`)
     })
     this.brain.on('turn.start', () => (this.turnSeen = true))
     this.brain.on('turn.end', (s) => {
@@ -987,6 +988,16 @@ export class App {
       runEvents: this.runLog.recent(20),
     }
   }
+}
+
+/**
+ * The gateway's summary ("all LLM providers failed: primary=bad_request (HTTP 400)") says which provider failed
+ * and how; the first provider's own words say why ("Request contains an invalid argument"). Both are scrubbed.
+ */
+function describeLlmError(e: Error): string {
+  const attempts = e instanceof LlmError ? e.attempts : undefined
+  const why = attempts?.find((a) => a.detail)?.detail
+  return why && !e.message.includes(why) ? `${e.message}. ${why}` : e.message
 }
 
 /** First line of an error's message, for log lines that must stay one line. */

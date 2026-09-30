@@ -55,7 +55,10 @@ const GeminiProvider = z.strictObject({
   kind: z.literal('gemini'),
   ...ProviderCommon,
   base_url: z.string().optional(),
+  /** Gemini 2.5: 0 turns thinking off. The Gemini 3 family rejects it: use `thinking_level` there. */
   thinking_budget: z.number().int().min(0).optional(),
+  /** Gemini 3 family: how much the model thinks before answering; `minimal` is fastest. */
+  thinking_level: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
   include_thoughts: z.boolean().optional(),
   safety_off: z.boolean().optional(),
   generation_config: z.record(z.string(), z.unknown()).optional(),
@@ -393,6 +396,7 @@ export async function toProviderConfig(
       apiKey: apiKey as string,
       ...(entry.base_url !== undefined && { baseUrl: entry.base_url }),
       ...(entry.thinking_budget !== undefined && { thinkingBudget: entry.thinking_budget }),
+      ...(entry.thinking_level !== undefined && { thinkingLevel: entry.thinking_level }),
       ...(entry.include_thoughts !== undefined && { includeThoughts: entry.include_thoughts }),
       ...(entry.safety_off !== undefined && { safetyOff: entry.safety_off }),
       ...(entry.generation_config !== undefined && { generationConfig: entry.generation_config }),
