@@ -1,0 +1,55 @@
+# Settings of the forge service (plugins/forge). Copy this file to where you keep your configuration, edit the copy,
+# and point plugins.forge.config.settings_file at it. Relative paths in it are relative to the file itself.
+#
+# Nothing here names a real model: the fragments under `match` are yours to fill in. The service refuses to draw with a
+# checkpoint that matches no family, so a picture is never made without the safe tags of its family.
+
+forge_url: http://127.0.0.1:7860      # your Forge (Stable Diffusion WebUI), started with --api
+
+# Layer 1. Words that may not appear in a prompt: a tag that hits is deleted. The list that ships with the service is
+# the baseline; add your own file after it. Use the same files in modes.draw.config.blocklist_files.
+blocklist_files:
+  - blocklist.default.txt
+
+# Layer 2. How a safe picture is asked for, per family of models. `match` are fragments of the checkpoint name
+# (case-insensitive); the first family that matches wins. `rating_tag` goes first in the positive prompt of every
+# picture of the family, `extra_negative` into its negative prompt. Never force `underwear`: in danbooru-style models it
+# asks for underwear to be shown.
+families:
+  illustrious:
+    match: ["my-illustrious-checkpoint"]
+    arch: sdxl
+    rating_tag: general
+    extra_negative: "(sensitive, questionable:1.2)"
+  pony:
+    match: ["my-pony-checkpoint"]
+    arch: sdxl
+    rating_tag: rating_safe
+    extra_negative: "(rating_explicit, rating_questionable:1.3)"
+
+allowed_archs: [sdxl]                 # FLUX and Krea style models ignore negative prompts at CFG 1 and need a lot of memory
+allowed_checkpoints: []               # name fragments; empty allows every checkpoint of a family with an allowed architecture
+lora_allowlist: []                    # LoRA names that may be used; empty means no LoRA at all
+max_loras: 2
+extra_positive: clothed               # forced into every positive prompt, after the rating tag
+extra_negative: "(nsfw, explicit, nude, naked, nipples, genitals, sex:1.4)"   # forced into every negative prompt
+allow_sensitive_routes: []            # route names that may pass a picture the rating model calls "sensitive", e.g. [self]
+
+# Layer 3. A rating model looks at every picture: `general` must be the highest rating and questionable + explicit must
+# stay under the limit. The model (about 400 MB) is fetched once into `dir` (default: <data>/forge/tagger); to fetch it
+# ahead of time run `python service.py --prepare ...` (see docs/mode-draw.md).
+tagger:
+  repo: SmilingWolf/wd-vit-tagger-v3
+  # dir: models/wd-tagger
+  max_questionable_plus_explicit: 0.15
+  retries: 1                          # more pictures, each with another seed, after one is refused; then "blocked"
+
+limits:
+  queue_max: 3                        # requests that may wait behind the picture being drawn
+  queue_wait_sec: 600
+  generate_timeout_sec: 300           # one picture; Forge is told to stop when it takes longer
+  max_steps: 100
+
+unload_on_stop: true                  # when the service stops (the mode is left), ask Forge to free the checkpoint's memory
+thumb_side: 512                       # the size of the copy of a picture the model looks at
+forge_check_sec: 10                   # how often the service looks whether Forge is there

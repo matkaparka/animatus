@@ -1,0 +1,137 @@
+# Baseline blocklist of the draw mode and the forge service. One entry per line, # starts a comment.
+#
+# An entry with only ASCII letters and digits matches whole words, case-insensitive ("sex" hits "sex" and
+# "sex, 1girl" but not "Essex"). Any other entry (Chinese, or mixed like 触手play) matches as a substring, also when
+# a viewer puts spaces or dots between the characters.
+#
+# It is used in two places: on what a viewer writes, before any model is asked (modes.draw.config.blocklist_files),
+# and on the prompts, where a tag that hits is deleted (the forge service's blocklist_files). Keep the two the same.
+# This is a starting point. Add the words and names that matter for your stream and your platform's rules.
+
+# ---- sexual content, nudity, suggestive
+色情
+黄图
+涩图
+色图
+瑟图
+本子
+裸
+露点
+露出
+全裸
+半裸
+胸部
+巨乳
+乳头
+奶子
+屁股
+内裤
+内衣
+胖次
+比基尼
+泳装
+丝袜
+黑丝
+白丝
+走光
+湿身
+性感
+诱惑
+做爱
+性交
+自慰
+高潮
+淫
+H图
+涩涩
+色色
+脱衣
+脱光
+开腿
+触手play
+调教
+捆绑
+绅士
+福利图
+
+# ---- minors
+萝莉
+正太
+幼女
+未成年
+loli
+lolicon
+shota
+underage
+
+# ---- gore, violence, self-harm
+血腥
+断头
+斩首
+内脏
+肢解
+虐杀
+自杀
+自残
+尸体
+碎尸
+
+# ---- real people, politics, hate symbols (real people by name belong in your own list)
+明星
+网红
+政治
+政治家
+领导人
+总统
+国旗
+纳粹
+nazi
+swastika
+president
+politician
+celebrity
+
+# ---- English
+nsfw
+nude
+naked
+nudity
+nipple
+nipples
+breast
+breasts
+boobs
+cleavage
+underwear
+panties
+pantsu
+lingerie
+bikini
+swimsuit
+bra
+topless
+bottomless
+genitals
+penis
+vagina
+pussy
+sex
+sexy
+erotic
+explicit
+hentai
+porn
+lewd
+ecchi
+cum
+masturbation
+bdsm
+bondage
+fetish
+see-through
+gore
+guro
+decapitation
+dismemberment
+suicide
+corpse
