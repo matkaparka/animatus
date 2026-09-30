@@ -87,6 +87,13 @@ export interface EnterEvent {
   ts: number
 }
 
+/** The stream went on the air, or went off it. The platform says so; a connection that drops is not this. */
+export interface LiveEvent {
+  type: 'live'
+  state: 'start' | 'end'
+  ts: number
+}
+
 export type AlarmCode = 'cookie_invalid' | 'masked_names' | 'guest_connection' | 'connection_lost'
 
 /**
@@ -119,7 +126,14 @@ export interface StatusEvent {
 }
 
 export type BilibiliSourceEvent =
-  DanmakuEvent | GiftEvent | GuardEvent | SuperChatEvent | EnterEvent | AlarmEvent | StatusEvent
+  | DanmakuEvent
+  | GiftEvent
+  | GuardEvent
+  | SuperChatEvent
+  | EnterEvent
+  | LiveEvent
+  | AlarmEvent
+  | StatusEvent
 
 /**
  * Login cookies, as the operator copied them from a logged-in browser session. Values are secrets: they

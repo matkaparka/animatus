@@ -33,6 +33,9 @@ export const FORMATS = {
   /** Replaces the content of a paid message that matched the blocklist: thank, but do not repeat it. */
   superChatRedacted: '（留言内容已被过滤，只道谢，不要提内容）',
 
+  /** The title of a guard tier, for the words of an automation rule. */
+  guardTitle: (level: number): string => GUARD_TITLES[level] ?? GUARD_TITLE_DEFAULT,
+
   /** A guard subscription; `months` above one is spelled out. */
   guard: (name: string, level: number, months: number): string => {
     const title = GUARD_TITLES[level] ?? GUARD_TITLE_DEFAULT

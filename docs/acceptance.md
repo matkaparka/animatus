@@ -207,6 +207,18 @@ observer as its own part and the unified worker protocol are not yet.
   to start; a mode may only start once the speech is quiet), a denial (nothing written), and the audience's own
   request absent from the list.
 - **Not done:** the prompt block has not been tuned for reliability beyond the above.
+
+### Automations (docs/automations.md)
+
+- **Tested:** 27 unit tests (the shape of a rule and its placeholders, what each action does, the trust of a reply and of
+  a tool call after an audience event and after a program event, cooldowns, the per-minute limit, the queue, timers on a
+  fake clock, an action that throws) and 12 through the whole program (a stream end that speaks and runs the memory pass, a
+  quiet room that speaks instead of the default line, a mode starting, a paid message above a price, a guard purchase
+  whose reply is answered by a model that obeys the audience and gets both of its tool calls refused, a name that cannot
+  carry a marker, a free note as the viewer, an approval tool queued as the system's after a program event and refused
+  after an audience one, and chat that runs no rule). Changing the trust of either path makes their tests fail.
+- **Not verified:** the platform's stream start and end messages against a live room (the source turns the library's
+  `onLiveStart` and `onLiveEnd` into an event; tested with a fake library); rules on a real stream.
 - **Known limit** (written in [tools.md](tools.md)): the gate cannot tell whether a moderator's own request is what they
   meant, and a model steered by the audience earlier in the conversation can misjudge a later moderator request; the
   streamer's yes is the safeguard for both.

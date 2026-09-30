@@ -25,6 +25,7 @@ import {
   SubtitleVariant,
   ToolTier,
 } from '@animatus/protocol'
+import { AutomationsConfig } from './automation/rules.ts'
 import { InboxConfigSchema } from './inbox/types.ts'
 import type { InboxConfig } from './inbox/types.ts'
 import type { LlmProviderConfig } from './llm/index.ts'
@@ -300,6 +301,7 @@ export const AppConfigSchema = z.strictObject({
   vram: Vram.prefault({}),
   memory: Memory.prefault({}),
   tools: Tools.prefault({}),
+  automations: AutomationsConfig.prefault({}),
   console: Console.prefault({}),
 })
 export type AppConfigInput = z.input<typeof AppConfigSchema>

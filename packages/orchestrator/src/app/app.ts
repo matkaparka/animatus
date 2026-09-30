@@ -30,7 +30,9 @@ import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
 import { parseConfig, secretRefs, toProviderConfig } from '../config.ts'
 import type { AppConfig, LlmProviderEntry } from '../config.ts'
+import { AutomationEngine } from '../automation/engine.ts'
 import { Blocklist, FORMATS, Pacer, Router, emptyBlocklist } from '../inbox/index.ts'
+import { cleanViewerText } from '../inbox/text.ts'
 import type { BlockChecker, PacerState } from '../inbox/index.ts'
 import { LlmError, LlmGateway, createLlmProvider } from '../llm/index.ts'
 import type { ChatMessage } from '../llm/types.ts'
@@ -69,7 +71,7 @@ import { AppError } from './errors.ts'
 import { MemoryService } from '../memory/service.ts'
 import { builtinControllers } from '../modes/controllers/index.ts'
 import { GpuMeter } from '../modes/gpu.ts'
-import type { ActivityFlags, LlmTextRequest, ModeHost } from '../modes/host.ts'
+import type { ActivityFlags, LlmTextRequest, ModeHost, TellResult } from '../modes/host.ts'
 import { loadModePacks } from '../modes/loader.ts'
 import type { LoadedMode } from '../modes/loader.ts'
 import { loadMeasurements } from '../modes/measurements.ts'
@@ -157,6 +159,9 @@ export class App {
   readonly memory: MemoryService | null
   /** Every tool the model asks for goes through this and nothing else (see `tools/gate.ts`). */
   readonly tools: ToolGate
+  /** The rules of the configuration's `automations` section (docs/automations.md). */
+  readonly automation: AutomationEngine
+  private readonly modeStates = new Map<string, string>()
   private readonly toolAudit: AuditSink
   /** What became of the tools the model asked for, told to it at the start of its next reply. */
   private toolNotes: string[] = []
@@ -437,6 +442,19 @@ export class App {
       now: this.now,
     })
 
+    // ── automations
+    this.automation = new AutomationEngine(config.automations, {
+      say: (text) => this.sayLine({ text }),
+      tell: (text, o) => this.tellModel(text, { fromProgram: o.fromProgram }),
+      tool: (req) => this.tools.request(req),
+      ...(this.memory ? { consolidate: () => (this.memory as MemoryService).consolidate() } : {}),
+      whenQuiet: (ms) => this.whenQuiet(ms),
+      tierOf: (name) => this.tools.tierOf(name),
+      log: (text) => void this.runLog.add('system', text),
+      warn: (code, message, subject) => void this.alarms.raise(code, 'warn', message, subject),
+      now: this.now,
+    })
+
     this.wire()
   }
 
@@ -671,6 +689,12 @@ export class App {
     const onModeChange = (id: string) => {
       const view = this.modes.viewOf(id)
       this.runLog.add('mode', `${id}: ${view.state}`)
+      const before = this.modeStates.get(id) ?? 'IDLE'
+      this.modeStates.set(id, view.state)
+      if (view.state === 'ACTIVE' && before !== 'ACTIVE')
+        this.automation.fire({ type: 'mode_entered', mode: id })
+      else if (view.state === 'IDLE' && (before === 'ACTIVE' || before === 'STOPPING'))
+        this.automation.fire({ type: 'mode_exited', mode: id })
       this.refreshModeStage()
       for (const fn of this.modeListeners) fn(view)
     }
@@ -869,6 +893,13 @@ export class App {
     const decision = this.pacer.decide(this.busyState, this.now())
     this.turnSeen = false
     if (decision.action !== 'send') return
+    // a rule for the cold start says what to do about a quiet room instead of the default line
+    if (this.automation.has('cold_start') && decision.batch.parts.every((p) => p.kind === 'cold')) {
+      const minutes = Math.max(1, Math.trunc((this.now() - this.router.lastActivity) / 60_000))
+      this.runLog.add('inbox', 'the room is quiet: left to the automation rules')
+      this.automation.fire({ type: 'cold_start', minutes })
+      return
+    }
     this.runLog.add('inbox', `to the brain: ${decision.text}`, 'untrusted')
     void this.send(decision.text, decision.batch)
   }
@@ -1013,10 +1044,28 @@ export class App {
           'untrusted'
         )
         this.router.onGuard({ uid: e.uid, uname: e.uname, level: e.level, num: e.num })
+        this.automation.fire({
+          type: 'guard',
+          uid: e.uid,
+          name: cleanViewerText(e.uname),
+          title: FORMATS.guardTitle(e.level),
+          months: e.num,
+        })
         break
       case 'superchat':
         this.runLog.add('viewer', `${e.uname} (paid ${e.price}): ${e.text}`, 'untrusted')
         this.router.onSuperChat({ uid: e.uid, uname: e.uname, price: e.price, msg: e.text })
+        this.automation.fire({
+          type: 'superchat',
+          uid: e.uid,
+          name: cleanViewerText(e.uname),
+          yuan: e.price,
+          text: cleanViewerText(e.text),
+        })
+        break
+      case 'live':
+        this.runLog.add('inbox', `the stream ${e.state === 'start' ? 'started' : 'ended'}`)
+        this.automation.fire({ type: e.state === 'start' ? 'stream_start' : 'stream_end' })
         break
       case 'alarm':
         this.alarms.raise(
@@ -1140,22 +1189,7 @@ export class App {
       say: (o) => this.sayLine(o),
       whenQuiet: (ms) => this.whenQuiet(ms),
       busy: () => this.busyNow(),
-      tellBrain: async (text, opts) => {
-        const summary = await this.brain.respond({
-          text,
-          source: 'system',
-          // untrusted unless the mode says the text is the program's own words (see ModeHost.tellBrain)
-          trust: opts?.fromProgram === true && !opts.images ? 'privileged' : 'untrusted',
-          ...(opts?.extras ? { extras: opts.extras } : {}),
-          ...(opts?.images ? { images: opts.images } : {}),
-          ...(opts?.preempt ? { preempt: true } : {}),
-        })
-        return {
-          status: summary.status,
-          sentences: summary.sentences,
-          ...(summary.error ? { error: firstLine(summary.error) } : {}),
-        }
-      },
+      tellBrain: (text, opts) => this.tellModel(text, opts ?? {}),
       brainBusy: () => this.brain.processing,
       serviceUrl: (service) => app.modes.serviceUrl(service),
       modeState: (id) => app.modes.state(id),
@@ -1166,6 +1200,34 @@ export class App {
       assetUrl: (library, ...parts) => assetUrl(library, ...parts),
       llmText: (req) => app.llmText(req),
       songLine: (text) => this.router.addSongLine(text),
+    }
+  }
+
+  /**
+   * A system message the model answers in character (see `ModeHost.tellBrain`). The reply is judged as untrusted unless
+   * the caller says the text is the program's own words, and never when there are pictures.
+   */
+  private async tellModel(
+    text: string,
+    opts: {
+      extras?: string[]
+      images?: { mime: string; base64: string }[]
+      preempt?: boolean
+      fromProgram?: boolean
+    }
+  ): Promise<TellResult> {
+    const summary = await this.brain.respond({
+      text,
+      source: 'system',
+      trust: opts.fromProgram === true && !opts.images ? 'privileged' : 'untrusted',
+      ...(opts.extras ? { extras: opts.extras } : {}),
+      ...(opts.images ? { images: opts.images } : {}),
+      ...(opts.preempt ? { preempt: true } : {}),
+    })
+    return {
+      status: summary.status,
+      sentences: summary.sentences,
+      ...(summary.error ? { error: firstLine(summary.error) } : {}),
     }
   }
 
@@ -1471,6 +1533,7 @@ export class App {
     this.measurementTimer = setInterval(() => void this.reloadMeasurements(), 30_000)
     this.measurementTimer.unref?.()
     this.modes.attach()
+    this.automation.start()
     await this.memory
       ?.start()
       .catch((e) => this.alarms.raise('memory', 'error', `memory could not start: ${firstLine(e)}`))
@@ -1576,6 +1639,7 @@ export class App {
     this.stopped = true
     this.logger('info', 'animatus stopping')
     if (this.inboxTimer) clearInterval(this.inboxTimer)
+    this.automation.stop()
     this.brain.cancelActive('shutdown')
     if (this.measurementTimer) clearInterval(this.measurementTimer)
     await this.modes.dispose()

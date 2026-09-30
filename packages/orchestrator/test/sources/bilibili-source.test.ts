@@ -213,9 +213,34 @@ describe('events', () => {
     handler.onIncomeSuperChat?.(superChatMessage({ price: 30 }))
     handler.onUserAction?.(userActionMessage('enter'))
     handler.onUserAction?.(userActionMessage('follow')) // not reported
+    handler.onLiveStart?.({
+      id: 'l1',
+      timestamp: 1,
+      type: 'LIVE',
+      body: { live_platform: 'x', room_id: 1 },
+      raw: {},
+    })
+    handler.onLiveEnd?.({
+      id: 'l2',
+      timestamp: 2,
+      type: 'PREPARING',
+      body: { room_id: 1 },
+      raw: {},
+    })
 
     const kinds = h.events.filter((e) => e.type !== 'status').map((e) => e.type)
-    expect(kinds).toEqual(['danmaku', 'danmaku', 'gift', 'gift', 'guard', 'superchat', 'enter'])
+    expect(kinds).toEqual([
+      'danmaku',
+      'danmaku',
+      'gift',
+      'gift',
+      'guard',
+      'superchat',
+      'enter',
+      'live',
+      'live',
+    ])
+    expect(h.ofType('live').map((e) => e.state)).toEqual(['start', 'end'])
     for (const event of h.events) expect(eventSchema.parse(event)).toEqual(event)
 
     const [text, sticker] = h.ofType('danmaku')

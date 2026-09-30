@@ -159,6 +159,17 @@ tools:
   max_pending: 20                  # requests waiting at once
   per_minute: 20                   # calls one source may ask for per minute
 
+# "When this happens, do that" (docs/automations.md). Off until you write a rule.
+automations:
+  rules: []
+  # - id: follow-reminder
+  #   on: timer
+  #   every_min: 20
+  #   do: [{ say: "If you like the stream, a follow means a lot." }]
+  # - id: after-the-stream
+  #   on: stream_end
+  #   do: [{ say: "That is all for today. Thank you for watching." }, { consolidate_memory: true }]
+
 # The graphics memory modes are admitted against.
 vram:
   # budget_mb: 12000               # leave out to read the card's size

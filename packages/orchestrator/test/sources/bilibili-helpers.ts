@@ -509,6 +509,7 @@ export const eventSchema = z.discriminatedUnion('type', [
     ts: z.number(),
   }),
   z.strictObject({ type: z.literal('enter'), uid, uname: z.string(), ts: z.number() }),
+  z.strictObject({ type: z.literal('live'), state: z.enum(['start', 'end']), ts: z.number() }),
   z.strictObject({
     type: z.literal('alarm'),
     code: z.enum(['cookie_invalid', 'masked_names', 'guest_connection', 'connection_lost']),

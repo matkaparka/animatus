@@ -395,6 +395,12 @@ export class BilibiliSource extends EventEmitter<{ event: [BilibiliSourceEvent] 
         else this.logger('warn', 'a guard purchase with an unexpected level was dropped')
       }),
       onIncomeSuperChat: guarded((msg: Message<SuperChatMsg>) => this.handleSuperChat(msg)),
+      onLiveStart: guarded(() =>
+        this.emitEvent({ type: 'live', state: 'start', ts: this.clock.now() })
+      ),
+      onLiveEnd: guarded(() =>
+        this.emitEvent({ type: 'live', state: 'end', ts: this.clock.now() })
+      ),
       onUserAction: guarded((msg: Message<UserActionMsg>) => {
         const event = normalizeEnter(msg, this.clock.now())
         if (event) this.emitEvent(event)
