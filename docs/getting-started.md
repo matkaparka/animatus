@@ -120,7 +120,7 @@ and restart. Chat and paid messages arrive as untrusted viewer text: they can ma
 
 - `lipsync_profile_missing`: the mouth follows the volume only. Set `paths.lipsync` to a folder that holds a wLipSync `profile.json` to get vowel shapes.
 - No live room: see above.
-- The character does not move much: without a folder of motions (`paths.motions`) it has only the built-in relaxed pose, breathing, blinking, gaze and small head movements. Motions (`idle/`, `talk/`, `poses/`, ...) are yours to bring; the folder layout is described at `paths.motions` in [`config.example/animatus.config.yaml`](../config.example/animatus.config.yaml).
+- The character does not move much: without a folder of motions (`paths.motions`) it has only the built-in relaxed pose, breathing, blinking, gaze and small head movements. Motions (`idle/`, `talk/`, `poses/`, ...) are yours to bring; the folder layout is in [`motions.md`](motions.md).
 
 ## When something is wrong
 
@@ -137,6 +137,7 @@ and restart. Chat and paid messages arrive as untrusted viewer text: they can ma
 
 ## Next
 
+- [`motions.md`](motions.md): the folder of idle, talk and pose motions, and how a clip is chosen.
 - [`modes.md`](modes.md): modes that take over the stream for a while (dance, sing, sleep, draw, commentary) and how to switch them on.
 - [`memory.md`](memory.md): what the character remembers between streams, and the editor for it.
 - [`tools.md`](tools.md), [`automations.md`](automations.md), [`safety.md`](safety.md): what the model may ask for, rules of the form "when this happens, do that", and what is checked before the voice.
