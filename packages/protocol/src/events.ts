@@ -16,7 +16,15 @@ import { Id } from './common.ts'
 export const TrustLevel = z.enum(['untrusted', 'trusted', 'privileged'])
 export type TrustLevel = z.infer<typeof TrustLevel>
 
-export const SourceKind = z.enum(['viewer', 'moderator', 'host', 'system', 'agent', 'plugin', 'web'])
+export const SourceKind = z.enum([
+  'viewer',
+  'moderator',
+  'host',
+  'system',
+  'agent',
+  'plugin',
+  'web',
+])
 export type SourceKind = z.infer<typeof SourceKind>
 
 export const EventSource = z.object({

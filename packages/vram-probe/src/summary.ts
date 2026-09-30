@@ -35,12 +35,23 @@ export function summarizeRecording(samples: Sample[], baselineN = 5): RecordingS
   const roleNames = new Set<string>()
   for (const s of samples) for (const r of Object.keys(s.roles)) roleNames.add(r)
   const roles: Record<string, RoleStats> = {}
-  for (const r of roleNames) roles[r] = statsOf(samples.map((s) => s.roles[r] ?? 0), baselineN)
-  const gaps = samples.filter((s) => s.nvsmi_mb !== null).map((s) => Math.abs(s.target_mb - (s.nvsmi_mb as number)))
+  for (const r of roleNames)
+    roles[r] = statsOf(
+      samples.map((s) => s.roles[r] ?? 0),
+      baselineN
+    )
+  const gaps = samples
+    .filter((s) => s.nvsmi_mb !== null)
+    .map((s) => Math.abs(s.target_mb - (s.nvsmi_mb as number)))
   return {
-    duration_s: samples.length ? round1(samples[samples.length - 1]!.elapsed_s - samples[0]!.elapsed_s) : 0,
+    duration_s: samples.length
+      ? round1(samples[samples.length - 1]!.elapsed_s - samples[0]!.elapsed_s)
+      : 0,
     samples: samples.length,
-    target: statsOf(samples.map((s) => s.target_mb), baselineN),
+    target: statsOf(
+      samples.map((s) => s.target_mb),
+      baselineN
+    ),
     max_nvsmi_gap_mb: gaps.length ? round1(Math.max(...gaps)) : null,
     roles,
   }
@@ -120,7 +131,11 @@ export function measureWindow(
 }
 
 /** Every enter:X .. exit:X pair found in the marks. */
-export function measureAllWindows(samples: Sample[], marks: Mark[], opts: WindowOptions = {}): WindowMeasurement[] {
+export function measureAllWindows(
+  samples: Sample[],
+  marks: Mark[],
+  opts: WindowOptions = {}
+): WindowMeasurement[] {
   const out: WindowMeasurement[] = []
   const seen = new Set<string>()
   for (const m of marks) {
@@ -134,7 +149,12 @@ export function measureAllWindows(samples: Sample[], marks: Mark[], opts: Window
 }
 
 /** Turn a window into the record the admission check stores (shape of protocol VramMeasurement). */
-export function toMeasurement(key: string, configHash: string, w: WindowMeasurement, note?: string): Measurement {
+export function toMeasurement(
+  key: string,
+  configHash: string,
+  w: WindowMeasurement,
+  note?: string
+): Measurement {
   return {
     key,
     config_hash: configHash,

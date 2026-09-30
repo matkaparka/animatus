@@ -12,11 +12,27 @@ const PLACEHOLDER =
 export const RULES = [
   { id: 'google-api-key', description: 'Google API key', regex: /AIza[0-9A-Za-z_-]{35}/g },
   { id: 'anthropic-key', description: 'Anthropic API key', regex: /sk-ant-[A-Za-z0-9_-]{20,}/g },
-  { id: 'openai-style-key', description: 'sk- style API key', regex: /\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{24,}/g },
-  { id: 'github-token', description: 'GitHub token', regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/g },
-  { id: 'aws-access-key', description: 'AWS access key id', regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
+  {
+    id: 'openai-style-key',
+    description: 'sk- style API key',
+    regex: /\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{24,}/g,
+  },
+  {
+    id: 'github-token',
+    description: 'GitHub token',
+    regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/g,
+  },
+  {
+    id: 'aws-access-key',
+    description: 'AWS access key id',
+    regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
+  },
   { id: 'slack-token', description: 'Slack token', regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}/g },
-  { id: 'private-key-block', description: 'private key block', regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
+  {
+    id: 'private-key-block',
+    description: 'private key block',
+    regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g,
+  },
   {
     id: 'bilibili-cookie',
     description: 'Bilibili cookie value',
@@ -27,14 +43,16 @@ export const RULES = [
   {
     id: 'generic-secret-assignment',
     description: 'secret-looking value assigned to a key/token/password',
-    regex: /\b(?:api[_-]?key|secret|token|passwd|password|access[_-]?key|auth[_-]?key)\b["']?\s*[:=]\s*["']([A-Za-z0-9_\-/+=.]{20,})["']/gi,
+    regex:
+      /\b(?:api[_-]?key|secret|token|passwd|password|access[_-]?key|auth[_-]?key)\b["']?\s*[:=]\s*["']([A-Za-z0-9_\-/+=.]{20,})["']/gi,
     group: 1,
     minEntropy: 3.2,
   },
   {
     id: 'personal-path',
     description: 'personal Windows user path',
-    regex: /[A-Za-z]:[\\/]+Users[\\/]+(?!<|%|Public\b|Default\b|\.\.\.|\$|\{|USERNAME|user\b|you\b|name\b)([^\\/\s"'`]+)/g,
+    regex:
+      /[A-Za-z]:[\\/]+Users[\\/]+(?!<|%|Public\b|Default\b|\.\.\.|\$|\{|USERNAME|user\b|you\b|name\b)([^\\/\s"'`]+)/g,
     group: 1,
   },
 ]
@@ -53,7 +71,9 @@ export function entropy(s) {
 
 export function redact(value) {
   const v = String(value)
-  return v.length <= 3 ? '***' : `${v.slice(0, 3)}${'*'.repeat(Math.min(v.length - 3, 8))} (${v.length} chars)`
+  return v.length <= 3
+    ? '***'
+    : `${v.slice(0, 3)}${'*'.repeat(Math.min(v.length - 3, 8))} (${v.length} chars)`
 }
 
 /**
@@ -77,7 +97,12 @@ export function scanText(text, opts = {}) {
         const value = rule.group ? m[rule.group] : m[0]
         if (rule.group && PLACEHOLDER.test(value)) continue
         if (rule.minEntropy && entropy(value) < rule.minEntropy) continue
-        findings.push({ line: i + 1, rule: rule.id, description: rule.description, preview: redact(value) })
+        findings.push({
+          line: i + 1,
+          rule: rule.id,
+          description: rule.description,
+          preview: redact(value),
+        })
         if (m[0].length === 0) rule.regex.lastIndex++
       }
     }
@@ -85,7 +110,12 @@ export function scanText(text, opts = {}) {
       const lower = line.toLowerCase()
       for (const term of deny) {
         if (lower.includes(term)) {
-          findings.push({ line: i + 1, rule: 'deny-term', description: 'term from the private deny list', preview: '(private term)' })
+          findings.push({
+            line: i + 1,
+            rule: 'deny-term',
+            description: 'term from the private deny list',
+            preview: '(private term)',
+          })
         }
       }
     }

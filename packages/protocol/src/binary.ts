@@ -85,11 +85,13 @@ export class FrameError extends Error {
 /** Decode one binary frame. Throws FrameError for anything malformed. */
 export function decodeFrame(buf: ArrayBuffer | Uint8Array): MediaFrame {
   const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
-  if (u8.byteLength < FRAME_HEADER_BYTES) throw new FrameError(`frame too short: ${u8.byteLength} bytes`)
+  if (u8.byteLength < FRAME_HEADER_BYTES)
+    throw new FrameError(`frame too short: ${u8.byteLength} bytes`)
   if (u8[0] !== FRAME_MAGIC_0 || u8[1] !== FRAME_MAGIC_1) throw new FrameError('bad magic')
   if (u8[2] !== FRAME_VERSION) throw new FrameError(`unsupported frame version ${u8[2]}`)
   const kind = u8[3]
-  if (kind !== FrameKind.Audio && kind !== FrameKind.Vrma) throw new FrameError(`unknown frame kind ${kind}`)
+  if (kind !== FrameKind.Audio && kind !== FrameKind.Vrma)
+    throw new FrameError(`unknown frame kind ${kind}`)
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength)
   return {
     kind,

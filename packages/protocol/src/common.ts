@@ -31,7 +31,10 @@ export const AssetUrl = z
   .min(8)
   .max(2048)
   .refine((u) => /^\/asset\/[^?#]+(\?[^#]*)?$/.test(u), 'asset url must look like /asset/<path>')
-  .refine((u) => !/(^|\/)\.\.?(\/|$|\?)/.test(u.split('?')[0] ?? ''), 'asset url must not contain dot segments')
+  .refine(
+    (u) => !/(^|\/)\.\.?(\/|$|\?)/.test(u.split('?')[0] ?? ''),
+    'asset url must not contain dot segments'
+  )
 export type AssetUrl = z.infer<typeof AssetUrl>
 
 /** Unsigned 32-bit integer (used for binary frame handles). */

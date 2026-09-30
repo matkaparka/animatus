@@ -4,13 +4,33 @@ import { DEFAULT_ROLES, RoleClassifier, mergeRoles, parseRoleSpec } from '../src
 const tree = (c: RoleClassifier) => {
   // bat(50) -> python api_v2(100) -> worker(101)
   c.setProc({ pid: 50, ppid: 4, name: 'cmd.exe', cmd: 'cmd /c start_voice.bat' })
-  c.setProc({ pid: 100, ppid: 50, name: 'python.exe', cmd: 'python.exe api_v2.py -a 127.0.0.1 -p 9880' })
-  c.setProc({ pid: 101, ppid: 100, name: 'python.exe', cmd: 'python.exe -c "multiprocessing spawn"' })
+  c.setProc({
+    pid: 100,
+    ppid: 50,
+    name: 'python.exe',
+    cmd: 'python.exe api_v2.py -a 127.0.0.1 -p 9880',
+  })
+  c.setProc({
+    pid: 101,
+    ppid: 100,
+    name: 'python.exe',
+    cmd: 'python.exe -c "multiprocessing spawn"',
+  })
   // chrome browser(299) -> gpu-process(300)
-  c.setProc({ pid: 299, ppid: 4, name: 'chrome.exe', cmd: '"chrome.exe" --user-data-dir=X:\\animatus-stage\\profile --app=http://127.0.0.1:5810' })
+  c.setProc({
+    pid: 299,
+    ppid: 4,
+    name: 'chrome.exe',
+    cmd: '"chrome.exe" --user-data-dir=X:\\animatus-stage\\profile --app=http://127.0.0.1:5810',
+  })
   c.setProc({ pid: 300, ppid: 299, name: 'chrome.exe', cmd: '"chrome.exe" --type=gpu-process' })
   // an unrelated chrome
-  c.setProc({ pid: 400, ppid: 4, name: 'chrome.exe', cmd: '"chrome.exe" --type=gpu-process --user-data-dir=X:\\personal' })
+  c.setProc({
+    pid: 400,
+    ppid: 4,
+    name: 'chrome.exe',
+    cmd: '"chrome.exe" --type=gpu-process --user-data-dir=X:\\personal',
+  })
   c.setProc({ pid: 500, ppid: 4, name: 'llama-server.exe', cmd: 'llama-server.exe -m x.gguf' })
 }
 
@@ -68,7 +88,10 @@ describe('RoleClassifier', () => {
 
 describe('parseRoleSpec', () => {
   it('parses the documented forms', () => {
-    expect(parseRoleSpec('forge=cmd:launch.py')).toEqual({ role: 'forge', rule: { cmd: 'launch.py' } })
+    expect(parseRoleSpec('forge=cmd:launch.py')).toEqual({
+      role: 'forge',
+      rule: { cmd: 'launch.py' },
+    })
     expect(parseRoleSpec('stage=name:chrome.exe;cmd:my profile')).toEqual({
       role: 'stage',
       rule: { name: 'chrome.exe', cmd: 'my profile' },

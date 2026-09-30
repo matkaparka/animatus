@@ -35,7 +35,8 @@ const asRegExp = (s: string): RegExp | null => {
 
 function ruleMatches(rule: RoleRule, p: ProcInfo): boolean {
   if (rule.pid !== undefined && rule.pid !== p.pid) return false
-  if (rule.name !== undefined && (p.name ?? '').toLowerCase() !== rule.name.toLowerCase()) return false
+  if (rule.name !== undefined && (p.name ?? '').toLowerCase() !== rule.name.toLowerCase())
+    return false
   if (rule.cmd !== undefined) {
     const cmd = p.cmd ?? ''
     const re = asRegExp(rule.cmd)
@@ -51,7 +52,10 @@ function ruleMatches(rule: RoleRule, p: ProcInfo): boolean {
  */
 export function parseRoleSpec(spec: string): { role: string; rule: RoleRule } {
   const eq = spec.indexOf('=')
-  if (eq <= 0) throw new Error(`bad --role "${spec}" (expected name=cmd:text | name=name:image.exe | name=pid:123)`)
+  if (eq <= 0)
+    throw new Error(
+      `bad --role "${spec}" (expected name=cmd:text | name=name:image.exe | name=pid:123)`
+    )
   const role = spec.slice(0, eq).trim()
   const rule: RoleRule = {}
   for (const part of spec.slice(eq + 1).split(';')) {

@@ -18,7 +18,9 @@ describe('scanText', () => {
   it('finds provider tokens', () => {
     expect(ids('x = ' + 'sk-' + 'ant-' + rnd(40))).toContain('anthropic-key')
     expect(ids('x = ' + 'sk-' + rnd(40))).toContain('openai-style-key')
-    expect(ids('x = ' + 'gh' + 'p_' + rnd(40, 'aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1'))).toContain('github-token')
+    expect(ids('x = ' + 'gh' + 'p_' + rnd(40, 'aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1'))).toContain(
+      'github-token'
+    )
     expect(ids('id = ' + 'AK' + 'IA' + 'ABCDEFGH12345678')).toContain('aws-access-key')
     expect(ids('-----BEGIN ' + 'RSA PRIVATE KEY-----')).toContain('private-key-block')
   })
@@ -31,9 +33,13 @@ describe('scanText', () => {
 
   it('flags secret-looking assignments, skips placeholders and low-entropy values', () => {
     expect(ids(`api_key: "${rnd(32)}"`)).toContain('generic-secret-assignment')
-    expect(ids('api_key: "your-api-key-goes-here-please"')).not.toContain('generic-secret-assignment')
+    expect(ids('api_key: "your-api-key-goes-here-please"')).not.toContain(
+      'generic-secret-assignment'
+    )
     expect(ids('token = "aaaaaaaaaaaaaaaaaaaaaaaaaaaa"')).not.toContain('generic-secret-assignment')
-    expect(ids('password = process.env.PASSWORD_FROM_ENV_VAR_LONG')).not.toContain('generic-secret-assignment')
+    expect(ids('password = process.env.PASSWORD_FROM_ENV_VAR_LONG')).not.toContain(
+      'generic-secret-assignment'
+    )
   })
 
   it('flags personal Windows paths but allows placeholders', () => {

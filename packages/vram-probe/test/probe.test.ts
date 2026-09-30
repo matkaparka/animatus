@@ -35,7 +35,13 @@ const make = (extra: ConstructorParameters<typeof VramProbe>[0] = {}) => {
 }
 
 describe('pickTarget', () => {
-  const ad = (luid: string, vendor: string, mb: number, flags = 0): AdapterInfo => ({ luid, name: luid, vendor, dedicated_mb: mb, flags })
+  const ad = (luid: string, vendor: string, mb: number, flags = 0): AdapterInfo => ({
+    luid,
+    name: luid,
+    vendor,
+    dedicated_mb: mb,
+    flags,
+  })
   it('prefers NVIDIA, then the largest hardware adapter, never the software one', () => {
     const list = [ad('a', '0x1002', 2019), ad('n', '0x10de', 11944), ad('w', '0x1414', 0, 2)]
     expect(pickTarget(list)?.luid).toBe('n')
@@ -94,15 +100,23 @@ describe('VramProbe with a scripted collector', () => {
     expect(w.peak_delta_mb).toBeGreaterThan(9000) // forge went up to 10100
     expect(enterT).toBeGreaterThan(0)
 
-    const jsonl = readFileSync(p.files!.jsonl, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const jsonl = readFileSync(p.files!.jsonl, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
     expect(jsonl[0].type).toBe('meta')
     expect(jsonl[0].target.name).toMatch(/NVIDIA/)
-    expect(jsonl.filter((r) => r.type === 'mark').map((r) => r.label)).toEqual(['enter:draw', 'exit:draw'])
+    expect(jsonl.filter((r) => r.type === 'mark').map((r) => r.label)).toEqual([
+      'enter:draw',
+      'exit:draw',
+    ])
     expect(jsonl.filter((r) => r.type === 'sample').length).toBe(p.samples.length)
     expect(jsonl.some((r) => r.type === 'proc' && r.pid === 100)).toBe(true)
 
     const csv = readFileSync(p.files!.csv, 'utf8').trim().split('\n')
-    expect(csv[0]).toBe('elapsed_s,target_mb,nvsmi_mb,gpt-sovits,forge,stage,motion,llm,other,other_gpus_mb')
+    expect(csv[0]).toBe(
+      'elapsed_s,target_mb,nvsmi_mb,gpt-sovits,forge,stage,motion,llm,other,other_gpus_mb'
+    )
     expect(csv.length).toBe(p.samples.length + 1)
   })
 
@@ -119,7 +133,10 @@ describe('VramProbe with a scripted collector', () => {
   })
 
   it('start() fails when the collector dies before reporting adapters', async () => {
-    const p = new VramProbe({ collectorCommand: { command: process.execPath, args: ['-e', 'process.exit(3)'] }, nvidiaSmi: false })
+    const p = new VramProbe({
+      collectorCommand: { command: process.execPath, args: ['-e', 'process.exit(3)'] },
+      nvidiaSmi: false,
+    })
     probes.push(p)
     await expect(p.start()).rejects.toThrow(/exited before reporting adapters/)
   })

@@ -46,7 +46,9 @@ describe('binary media frames', () => {
     const f = decodeFrame(padded.subarray(5))
     expect(f.handle).toBe(5)
     expect([...f.payload]).toEqual([10, 11])
-    const g = decodeFrame(inner.buffer.slice(inner.byteOffset, inner.byteOffset + inner.byteLength) as ArrayBuffer)
+    const g = decodeFrame(
+      inner.buffer.slice(inner.byteOffset, inner.byteOffset + inner.byteLength) as ArrayBuffer
+    )
     expect(g.index).toBe(1)
   })
 
@@ -69,7 +71,9 @@ describe('binary media frames', () => {
 
   it('rejects out-of-range handle and index when encoding', () => {
     expect(() => encodeFrame(FrameKind.Audio, -1, 0, new Uint8Array(0), true)).toThrow(RangeError)
-    expect(() => encodeFrame(FrameKind.Audio, 0, 2 ** 32, new Uint8Array(0), true)).toThrow(RangeError)
+    expect(() => encodeFrame(FrameKind.Audio, 0, 2 ** 32, new Uint8Array(0), true)).toThrow(
+      RangeError
+    )
     expect(() => encodeFrame(FrameKind.Audio, 1.5, 0, new Uint8Array(0), true)).toThrow(RangeError)
   })
 

@@ -23,10 +23,7 @@ const MAX_BYTES = 2 * 1024 * 1024
 const git = (args, opts = {}) =>
   execFileSync('git', args, { cwd: root, maxBuffer: 256 * 1024 * 1024, ...opts })
 
-const gitLines = (args) =>
-  git(args, { encoding: 'utf8' })
-    .split('\0')
-    .filter(Boolean)
+const gitLines = (args) => git(args, { encoding: 'utf8' }).split('\0').filter(Boolean)
 
 const looksBinary = (buf) => buf.subarray(0, 8000).includes(0)
 
@@ -107,4 +104,6 @@ if (total > 0) {
   console.error('Real false positive? Add the file path to .secretscanignore.')
   process.exit(1)
 }
-console.log(`secret-scan: clean (${scanned} file(s) scanned${denyTerms.length ? `, ${denyTerms.length} private deny term(s)` : ''}).`)
+console.log(
+  `secret-scan: clean (${scanned} file(s) scanned${denyTerms.length ? `, ${denyTerms.length} private deny term(s)` : ''}).`
+)

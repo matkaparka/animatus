@@ -5,7 +5,15 @@ import { dirname, join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_ROLES, RoleClassifier, type RoleMap } from './roles.ts'
-import type { AdapterInfo, LogRecord, Mark, MetaRecord, ProcEntry, RawSample, Sample } from './types.ts'
+import type {
+  AdapterInfo,
+  LogRecord,
+  Mark,
+  MetaRecord,
+  ProcEntry,
+  RawSample,
+  Sample,
+} from './types.ts'
 
 export const COLLECTOR_PATH = join(dirname(fileURLToPath(import.meta.url)), 'collector.ps1')
 
@@ -121,14 +129,19 @@ export class VramProbe extends EventEmitter {
         String(this.opts.minProcMB ?? 1),
       ],
     }
-    const child = spawn(cmd.command, cmd.args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    const child = spawn(cmd.command, cmd.args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    })
     this.child = child
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (d: string) => this.emit('collector-stderr', d))
     const ready = new Promise<void>((ok, fail) => {
       this.once('adapters', () => ok())
       child.once('error', fail)
-      child.once('exit', (code) => fail(new Error(`collector exited before reporting adapters (code ${code})`)))
+      child.once('exit', (code) =>
+        fail(new Error(`collector exited before reporting adapters (code ${code})`))
+      )
     })
     child.once('exit', (code) => this.emit('exit', code))
     const rl = createInterface({ input: child.stdout, crlfDelay: Infinity })
@@ -197,7 +210,12 @@ export class VramProbe extends EventEmitter {
           cmd,
           gone: msg.gone === true,
         })
-        this.write({ type: 'proc', pid: Number(msg.pid), name: msg.name as string | undefined, cmd })
+        this.write({
+          type: 'proc',
+          pid: Number(msg.pid),
+          name: msg.name as string | undefined,
+          cmd,
+        })
         break
       }
       case 'sample': {
@@ -224,12 +242,18 @@ export class VramProbe extends EventEmitter {
     if (this.opts.outDir) {
       const dir = resolve(this.opts.outDir)
       mkdirSync(dir, { recursive: true })
-      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-')
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\..*/, '')
+        .replace('T', '-')
       const base = join(dir, `${this.opts.label ?? 'vram'}-${stamp}`)
       this.files = { jsonl: `${base}.jsonl`, csv: `${base}.csv` }
       this.jsonl = createWriteStream(this.files.jsonl, { encoding: 'utf8' })
       this.csv = createWriteStream(this.files.csv, { encoding: 'utf8' })
-      this.csv.write(['elapsed_s', 'target_mb', 'nvsmi_mb', ...this.csvRoles, 'other_gpus_mb'].join(',') + '\n')
+      this.csv.write(
+        ['elapsed_s', 'target_mb', 'nvsmi_mb', ...this.csvRoles, 'other_gpus_mb'].join(',') + '\n'
+      )
     }
     const meta: MetaRecord = {
       type: 'meta',

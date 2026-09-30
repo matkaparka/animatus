@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { measureAllWindows, measureWindow, median, summarizeRecording, toMeasurement } from '../src/summary.ts'
+import {
+  measureAllWindows,
+  measureWindow,
+  median,
+  summarizeRecording,
+  toMeasurement,
+} from '../src/summary.ts'
 import type { Mark, Sample } from '../src/types.ts'
 
 /** One sample per second starting at t=0; `forge` and `gsv` are the role columns. */
@@ -87,11 +93,18 @@ describe('measureWindow', () => {
 
   it('returns null for missing marks or an empty window', () => {
     expect(measureWindow(samples, marks, 'enter:nope', 'exit:draw')).toBeNull()
-    expect(measureWindow(samples, [mark('enter:a', 100), mark('exit:a', 101)], 'enter:a', 'exit:a')).toBeNull()
+    expect(
+      measureWindow(samples, [mark('enter:a', 100), mark('exit:a', 101)], 'enter:a', 'exit:a')
+    ).toBeNull()
   })
 
   it('uses the latest enter mark and an exit that comes after it', () => {
-    const m = [mark('enter:draw', 2), mark('exit:draw', 3), mark('enter:draw', 10), mark('exit:draw', 29)]
+    const m = [
+      mark('enter:draw', 2),
+      mark('exit:draw', 3),
+      mark('enter:draw', 10),
+      mark('exit:draw', 29),
+    ]
     const w = measureWindow(samples, m, 'enter:draw', 'exit:draw')!
     expect(w.duration_s).toBe(19)
   })
@@ -105,7 +118,13 @@ describe('measureWindow', () => {
   it('toMeasurement produces the admission record shape', () => {
     const w = measureWindow(samples, marks, 'enter:draw', 'exit:draw')!
     const rec = toMeasurement('forge', 'abc123', w, 'note')
-    expect(rec).toMatchObject({ key: 'forge', config_hash: 'abc123', peak_mb: 7200, steady_mb: 3100, note: 'note' })
+    expect(rec).toMatchObject({
+      key: 'forge',
+      config_hash: 'abc123',
+      peak_mb: 7200,
+      steady_mb: 3100,
+      note: 'note',
+    })
     expect(new Date(rec.measured_at).getTime()).toBeGreaterThan(0)
   })
 })
