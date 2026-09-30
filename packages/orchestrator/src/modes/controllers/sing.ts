@@ -443,8 +443,9 @@ export function createSingController(
       }
       lastRefusal = ''
       if (nothingToSing) {
-        // the entry was taken off the queue between the look and the claim: not a failure
+        // the entry was taken off the queue between the look and the claim: not a failure, but not to be repeated at once
         nothingToSing = false
+        retryAt = host.now() + cfg.retry_after_sec * 1000
         await host.exitMode('sing', 'nothing to sing')
         return { ok: false, reason: 'no song was ready any more' }
       }
@@ -736,13 +737,18 @@ export function createSingController(
         host.hub.send({ type: 'sing.stop', fade_s: cfg.stop_fade_s })
         if (endReason !== 'skipped') endReason = reason === 'console' ? 'stopped' : 'interrupted'
       }
+      // The Modes page's Exit button calls this directly (not `stop` below): the operator ended it, so singing stays off.
+      if (reason === 'console') paused = true
       phase = 'ending'
       host.holdSpeech('sing', false)
       hideOverlays()
       const outcome = endReason
       playing = null
       if (p) {
-        await settle(client.done({ qid: p.qid, outcome, reason }), 'reporting the end of the song')
+        await settle(
+          client.done({ qid: p.qid, outcome, ...(reason !== outcome ? { reason } : {}) }),
+          'reporting the end of the song'
+        )
         event(`sing "${p.title}" over (${reason})`)
       }
       if (!cfg.outro || !p || (outcome !== 'done' && outcome !== 'skipped')) return idle()
@@ -883,7 +889,7 @@ export function createSingController(
             token++ // the song that is still waiting for the voice is withdrawn
             idle()
             event('the song waiting for the voice was withdrawn from the console')
-          } else await host.exitMode('sing', 'console')
+          } else await host.exitMode('sing', 'console') // which also pauses
           return { ok: true }
         }
         case 'skip':
