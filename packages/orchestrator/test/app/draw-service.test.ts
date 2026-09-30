@@ -204,6 +204,49 @@ describe.runIf(CAN_RUN)('the draw mode with the real image service', { timeout: 
     expect(frames(stage).map(overlayText)).toEqual(['on:弹幕发送「画 + 内容」召唤作品'])
   })
 
+  it('a prompt the service finds nothing left of is a refusal, and Forge is never asked', async () => {
+    const { r, forge, stage } = await serviceRig()
+    r.llm.reply = (req) =>
+      tagOf(req) === 'draw-select'
+        ? [selectAnswer()]
+        : tagOf(req) === 'draw-write'
+          ? [writeAnswer('nude, naked, sex')]
+          : ['[happy]unused']
+    await enter(r)
+    await until(() => r.app.modes.state('draw') === 'ACTIVE', 45_000)
+    r.bili.emit(danmaku('画 一条龙'))
+    await until(() => stage.begins.length >= 1, 20_000, 'the refusal')
+    expect(forge.txt2img).toEqual([])
+    expect(frames(stage).map(overlayText)).toEqual([
+      'on:弹幕发送「画 + 内容」召唤作品',
+      'on:作画中 · ann：一条龙',
+      'on:弹幕发送「画 + 内容」召唤作品',
+    ])
+    expect(String(stage.begins[0]!.subtitle)).not.toContain('龙')
+    expect(r.app.alarms.list()).toEqual([])
+  })
+
+  it('a picture the rating model refuses is drawn once more, then blocked: a refusal, nothing kept', async () => {
+    process.env.FORGE_TEST_RATING = 'questionable'
+    onCleanup(() => void delete process.env.FORGE_TEST_RATING)
+    const { r, forge, stage } = await serviceRig()
+    await enter(r)
+    await until(() => r.app.modes.state('draw') === 'ACTIVE', 45_000)
+    delete process.env.FORGE_TEST_RATING
+    r.bili.emit(danmaku('画 一条龙'))
+    await until(() => stage.begins.length >= 1, 30_000, 'the refusal')
+    expect(forge.txt2img).toHaveLength(2)
+    expect(forge.txt2img[0]!.seed).not.toBe(forge.txt2img[1]!.seed)
+    expect(frames(stage).at(-1)).toMatchObject({
+      visible: true,
+      text: '弹幕发送「画 + 内容」召唤作品',
+    })
+    expect(frames(stage).some((f) => f.image !== undefined)).toBe(false)
+    expect(await readdir(path.join(r.dir, 'data', 'generated'))).toEqual([])
+    expect(String(stage.begins[0]!.subtitle)).not.toContain('龙')
+    expect(r.app.alarms.list()).toEqual([])
+  })
+
   it('a model no family covers is refused before anything is drawn, with the reason the service gave', async () => {
     const { r, forge } = await serviceRig({
       families: '  other: { match: [nothing-matches-this], arch: sdxl, rating_tag: general }',

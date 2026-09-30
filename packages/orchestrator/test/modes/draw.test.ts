@@ -425,7 +425,7 @@ describe('a picture', () => {
       steps: 30,
       sampler_name: 'Euler a',
     })
-    expect(String(asked!.prompt)).toMatch(/^masterpiece, best quality, 1girl, armor$/)
+    expect(asked).toMatchObject({ prompt: '1girl, armor', prefix: 'masterpiece, best quality' })
 
     // the picture is kept where the stage is served from
     const files = await pictureFiles(r)

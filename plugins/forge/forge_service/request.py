@@ -19,6 +19,7 @@ FIELDS = frozenset(
     {
         "checkpoint",
         "prompt",
+        "prefix",
         "negative_prompt",
         "width",
         "height",
@@ -36,7 +37,10 @@ FIELDS = frozenset(
 @dataclass(frozen=True)
 class GenerateRequest:
     checkpoint: str
+    #: what the model wrote: nothing left of it after the blocklist means the request is refused
     prompt: str
+    #: tags of the caller's own configuration (quality words, a LoRA's trigger words), put in front of `prompt`
+    prefix: str
     negative_prompt: str
     width: int
     height: int
@@ -88,6 +92,7 @@ def parse_generate(raw: Any, settings: Settings) -> tuple[GenerateRequest | None
 
     checkpoint = text("checkpoint", 1, 300)
     prompt = text("prompt", 1, 4000)
+    prefix = text("prefix", 0, 600, required=False)
     negative = text("negative_prompt", 0, 2000, required=False)
     width = whole("width", 64, 4096)
     height = whole("height", 64, 4096)
@@ -138,6 +143,7 @@ def parse_generate(raw: Any, settings: Settings) -> tuple[GenerateRequest | None
         GenerateRequest(
             checkpoint=checkpoint,
             prompt=prompt,
+            prefix=prefix,
             negative_prompt=negative,
             width=width,
             height=height,

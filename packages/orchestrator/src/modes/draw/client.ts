@@ -47,7 +47,10 @@ export type ForgeCatalog = z.infer<typeof Catalog>
 
 export interface GeneratePayload {
   checkpoint: string
+  /** What the model wrote. */
   prompt: string
+  /** What the configuration adds in front of it (quality words, LoRA trigger words). */
+  prefix?: string
   negative_prompt: string
   width: number
   height: number

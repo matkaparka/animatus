@@ -339,7 +339,13 @@ class ForgeService:
         if req.loras:
             check_loras(self.settings, await self.forge.loras(), [name for name, _ in req.loras])
         built = build_prompts(
-            self.settings, family, self.blocklist, req.prompt, req.negative_prompt, list(req.loras)
+            self.settings,
+            family,
+            self.blocklist,
+            req.prompt,
+            req.negative_prompt,
+            list(req.loras),
+            prefix=req.prefix,
         )
         size = fit_size(req.width, req.height, self.max_long_side)
         payload: dict[str, Any] = {

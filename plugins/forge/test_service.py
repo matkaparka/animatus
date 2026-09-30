@@ -403,6 +403,19 @@ class GenerateTest(ServiceCase):
         self.assertEqual((status, body), (200, {"status": "rejected", "reason": "empty_prompt"}))
         self.assertEqual(self.forge.txt2img_payloads, [])
 
+    async def test_and_so_is_one_whose_only_other_words_are_the_callers_own_prefix(self) -> None:
+        rig = await self.start()
+        status, body = await self.generate(rig, prompt="nude, sex", prefix="masterpiece, best quality")
+        self.assertEqual((status, body), (200, {"status": "rejected", "reason": "empty_prompt"}))
+        self.assertEqual(self.forge.txt2img_payloads, [])
+
+    async def test_the_prefix_is_put_in_front_of_the_prompt_after_the_forced_tags(self) -> None:
+        rig = await self.start()
+        await self.generate(rig, prefix="masterpiece, best quality")
+        self.assertEqual(
+            self.forge.txt2img_payloads[0]["prompt"], "general, clothed, masterpiece, best quality, 1girl, armor, sword"
+        )
+
     async def test_the_blocklist_is_read_again_when_its_file_changes(self) -> None:
         words = self.dir / "words.txt"
         rig = await self.start(blocklist=Blocklist([words], recheck_sec=0))
@@ -616,6 +629,8 @@ class GenerateTest(ServiceCase):
             {k: v for k, v in payload().items() if k != "prompt"},
             payload(prompt=""),
             payload(prompt="x" * 4001),
+            payload(prefix=5),
+            payload(prefix="x" * 601),
             payload(checkpoint=5),
             payload(width="1024"),
             payload(width=32),

@@ -32,7 +32,7 @@ export class PlanError extends Error {
 }
 
 export type RefusalReason =
-  'planner_refused' | 'planner_no_json' | 'writer_refused' | 'writer_no_json'
+  'planner_refused' | 'planner_no_json' | 'writer_refused' | 'writer_no_json' | 'writer_empty'
 
 export type Planned =
   | { kind: 'refused'; reason: RefusalReason }
@@ -327,14 +327,21 @@ export function createPlanner(host: ModeHost, cfg: DrawSettings): Planner {
         return { kind: 'refused', reason: 'writer_no_json' }
       if (words.refuse) return { kind: 'refused', reason: 'writer_refused' }
 
-      let body = cleanPrompt(body0)
-      for (const t of chosen.flatMap((c) => c.lora.trigger).reverse())
-        if (!body.toLowerCase().includes(t.toLowerCase())) body = `${t}, ${body}`
-      body = dropAmbiguous(body, request, cfg.ambiguous_tags)
-      const hasQuality = QUALITY_WORDS.some((w) => body.toLowerCase().includes(w))
+      // What the model wrote goes as the prompt; what the configuration adds (the quality words of the model, the
+      // trigger words of the LoRAs) goes as the prefix, so that the image service can tell a prompt whose every tag is
+      // on its blocklist from one that only has the configuration's words left.
+      const body = strip(dropAmbiguous(cleanPrompt(body0), request, cfg.ambiguous_tags))
+      if (body === '') return { kind: 'refused', reason: 'writer_empty' }
+      const lower = body.toLowerCase()
+      const triggers = chosen
+        .flatMap((c) => c.lora.trigger)
+        .filter((t) => !lower.includes(t.toLowerCase()))
+      const hasQuality = QUALITY_WORDS.some((w) => lower.includes(w))
+      const prefix = [hasQuality ? '' : strip(entry.prefix), ...triggers].filter(Boolean).join(', ')
       const payload: GeneratePayload = {
         checkpoint: entry.name,
-        prompt: [hasQuality ? '' : strip(entry.prefix), strip(body)].filter(Boolean).join(', '),
+        prompt: body,
+        ...(prefix ? { prefix } : {}),
         negative_prompt: [strip(entry.negative), strip(cleanPrompt(String(words.negative ?? '')))]
           .filter(Boolean)
           .join(', '),

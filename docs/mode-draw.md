@@ -186,9 +186,9 @@ Relative paths in it are relative to the file.
    is not JSON counts as a refusal too (a provider's filter answers nothing). A model that cannot be reached is an error,
    not a refusal.
 2. **Prompt** (service): the prompt is stripped of `<lora:…>` and every other `<…>` tag (only the service attaches LoRAs, from
-   its allowlist), tags that hit the blocklist are deleted, and only then are the forced tags put in at the front:
-   the family's rating tag (`general`, `rating_safe`) and `clothed`; the forced negatives go first in the negative
-   prompt. The finished prompt is scanned again. A checkpoint that matches no family is refused (no tags could be chosen
+   its allowlist), tags that hit the blocklist are deleted (nothing left of the model's words: refused), and only then are the
+   forced tags put in at the front: the family's rating tag (`general`, `rating_safe`) and `clothed`, then the caller's
+   prefix, then the prompt; the forced negatives go first in the negative prompt. The finished prompt is scanned again. A checkpoint that matches no family is refused (no tags could be chosen
    for it); the settings are refused if the blocklist would delete a forced tag.
 3. **Picture** (service): the rating model must call the picture `general` (or `sensitive` on a route in
    `allow_sensitive_routes`) and questionable + explicit must stay under the limit. Otherwise it is drawn once more with
@@ -235,8 +235,10 @@ refusal of the content is a normal answer that says so. Nothing answers 200 with
   number it was saved against (editing the configuration file later wins).
 - `GET /catalog`: `200 {checkpoints: [{name, title, family, allowed, why_not?}], loras: [{name, alias?, allowed}], families,
   max_long_side}`; `502 forge_unreachable`, `504`.
-- `POST /generate` `{checkpoint, prompt, negative_prompt?, width, height, steps, cfg_scale, sampler_name, scheduler?, seed?
-  (-1 random), loras: [{name, weight}], route}`, nothing else. `200 {status: "ok", image_b64, thumb_b64, width, height, seed,
+- `POST /generate` `{checkpoint, prompt, prefix?, negative_prompt?, width, height, steps, cfg_scale, sampler_name, scheduler?,
+  seed? (-1 random), loras: [{name, weight}], route}`, nothing else. `prompt` is what the model wrote, `prefix` what the
+  caller's configuration adds in front of it (quality words, trigger words): kept apart so that a model whose every tag is on
+  the blocklist gets no picture (`rejected`, `empty_prompt`) instead of one made of the quality words alone. `200 {status: "ok", image_b64, thumb_b64, width, height, seed,
   attempts, ratings, checkpoint, family, scrubbed, elapsed_ms}`; `200 {status: "rejected", reason}` (`empty_prompt`); `200
   {status: "blocked", reason: "rating", attempts, ratings}`; errors: `400 invalid_request`, `422` (`checkpoint_not_found`,
   `unknown_family`, `checkpoint_not_allowed`, `lora_not_allowed`, `lora_not_found`), `500` (`safety_config`, `internal_error`), `502`

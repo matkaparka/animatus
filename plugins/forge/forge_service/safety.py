@@ -1,8 +1,9 @@
 """Layer 2: what is added to and taken out of the prompts before Forge sees them.
 
 The order matters. The caller's prompt is stripped of extra-network tags and of listed tags first; the forced safe
-tags are put in afterwards, at the front, so nothing that cleans a prompt up can delete them (a clean-up treats
-`rating_safe` and friends as quality words and removes them). The finished prompt is scanned once more.
+tags are put in afterwards, at the front (then the caller's own prefix, then the prompt), so nothing that cleans a
+prompt up can delete them (a clean-up treats `rating_safe` and friends as quality words and removes them). The
+finished prompt is scanned once more.
 """
 
 from __future__ import annotations
@@ -56,7 +57,11 @@ def build_prompts(
     prompt: str,
     negative: str,
     loras: list[tuple[str, float]],
+    prefix: str = "",
 ) -> Built:
+    """`prompt` is what the model wrote and `prefix` what the caller's own configuration adds in front of it (quality
+    words, a LoRA's trigger words). They are kept apart so that a model whose every tag is on the blocklist gets no
+    picture: the prefix alone must not make a prompt out of nothing."""
     scrubbed: list[str] = []
     body, dropped = blocklist.scrub_prompt(strip_networks(prompt))
     scrubbed.extend(dropped)
@@ -64,7 +69,8 @@ def build_prompts(
         raise EmptyPrompt("nothing is left of the prompt after the blocklist")
 
     forced = forced_positive(settings, family)
-    positive, dropped = blocklist.scrub_prompt(", ".join([*forced, body]))
+    front = strip_networks(prefix)
+    positive, dropped = blocklist.scrub_prompt(", ".join(t for t in [*forced, front, body] if t))
     scrubbed.extend(dropped)
     kept = {t.lower() for t in _tags(positive)}
     lost = [t for t in forced if t.lower() not in kept]

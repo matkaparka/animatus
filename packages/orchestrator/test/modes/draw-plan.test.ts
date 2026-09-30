@@ -121,8 +121,10 @@ describe('a picture on the default route', () => {
     expect(planned.self).toBe(false)
     expect(planned.payload).toEqual({
       checkpoint: 'anime-model',
-      // the quality prefix of the model, the LoRA's trigger word, then what the model wrote without its quality words
-      prompt: 'masterpiece, best quality, sword_style, 1girl, armor, sword',
+      // what the model wrote, without its quality words and the LoRA tag it slipped in ...
+      prompt: '1girl, armor, sword',
+      // ... and, apart from it, what the configuration adds: the model's quality words and the LoRA's trigger word
+      prefix: 'masterpiece, best quality, sword_style',
       negative_prompt: 'lowres, blurry',
       width: expect.any(Number),
       height: expect.any(Number),
@@ -215,6 +217,13 @@ describe('a picture on the default route', () => {
     const planned = await r.plan('x')
     if (planned.kind !== 'ok') throw new Error('expected a plan')
     expect(planned.payload.prompt).toBe('1girl, Sword_Style, worst quality lowres, absurdres armor')
+    expect(planned.payload).not.toHaveProperty('prefix') // nothing left to add
+  })
+
+  it('a prompt of nothing but quality words and LoRA tags is not a prompt: the writer has said nothing', async () => {
+    const r = rig()
+    r.answers.push(select(), write('masterpiece, best quality, <lora:x:1>'))
+    expect(await r.plan('x')).toEqual({ kind: 'refused', reason: 'writer_empty' })
   })
 
   it('a tag that means something else in the models vocabulary is dropped unless the request asked for it', async () => {
@@ -325,8 +334,9 @@ describe('the self-portrait route', () => {
     expect(planned.self).toBe(true)
     expect(planned.payload).toMatchObject({
       checkpoint: 'self-model',
-      // the model's prefix, the trigger words in the order written, then the scene
-      prompt: 'masterpiece, self_trigger, mecha dragon, solo, standing, night sky',
+      prompt: 'solo, standing, night sky',
+      // the model's prefix, then the trigger words in the order written
+      prefix: 'masterpiece, self_trigger, mecha dragon',
       loras: [{ name: 'self-lora', weight: 0.7 }],
       route: 'self',
     })
@@ -373,7 +383,8 @@ describe('the photo route', () => {
     expect(planned.route).toBe('photo')
     expect(planned.payload).toMatchObject({
       checkpoint: 'photo-model',
-      prompt: 'score_9, score_8_up, a man in a suit, photo',
+      prompt: 'a man in a suit, photo',
+      prefix: 'score_9, score_8_up',
       loras: [{ name: 'photo-lora', weight: 0.8 }],
     })
     expect(userOf(r.calls[0]!)).toContain('photographic picture')

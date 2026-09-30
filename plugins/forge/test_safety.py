@@ -30,8 +30,10 @@ class BuildPromptsTest(unittest.TestCase):
         self.block = Blocklist(self.settings.blocklist_files)
         self.family = next(f for f in self.settings.families if f.name == "anime")
 
-    def build(self, prompt: str, negative: str = "", loras: list[tuple[str, float]] | None = None):
-        return build_prompts(self.settings, self.family, self.block, prompt, negative, loras or [])
+    def build(
+        self, prompt: str, negative: str = "", loras: list[tuple[str, float]] | None = None, prefix: str = ""
+    ):
+        return build_prompts(self.settings, self.family, self.block, prompt, negative, loras or [], prefix=prefix)
 
     def test_the_forced_tags_come_first_in_the_positive_prompt(self) -> None:
         built = self.build("masterpiece, 1girl, armor")
@@ -62,6 +64,20 @@ class BuildPromptsTest(unittest.TestCase):
     def test_nothing_left_after_the_blocklist_is_refused(self) -> None:
         with self.assertRaises(EmptyPrompt):
             self.build("nude, sex, <lora:x:1>")
+
+    def test_the_callers_prefix_goes_between_the_forced_tags_and_the_prompt(self) -> None:
+        built = self.build("1girl, armor", prefix="masterpiece, best quality, my_trigger")
+        self.assertEqual(built.prompt, "general, clothed, masterpiece, best quality, my_trigger, 1girl, armor")
+
+    def test_the_prefix_is_cleaned_and_scanned_like_the_rest(self) -> None:
+        built = self.build("1girl", prefix="masterpiece, <lora:sneaky:1>, nude")
+        self.assertEqual(built.prompt, "general, clothed, masterpiece, 1girl")
+        self.assertEqual(built.scrubbed, ("nude",))
+
+    def test_a_prefix_cannot_make_a_prompt_out_of_nothing(self) -> None:
+        # the model's own words were all on the blocklist: the quality words of the configuration must not draw a picture
+        with self.assertRaises(EmptyPrompt):
+            self.build("nude, naked, sex", prefix="masterpiece, best quality")
 
     def test_underwear_is_never_forced(self) -> None:
         built = self.build("1girl")
