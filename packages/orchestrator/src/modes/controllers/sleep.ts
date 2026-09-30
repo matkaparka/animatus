@@ -72,7 +72,10 @@ export interface SleepStatus {
   tracks: number
 }
 
-/** What a test may replace: reading the folder, reading the saved state (real disk I/O has no place under fake timers), and the dice. */
+/**
+ * What a test may replace: reading the folder, reading the saved state (real disk I/O has no place under fake timers)
+ * and the dice.
+ */
 export interface SleepDeps {
   scan?: (dir: string) => Promise<TrackScan>
   readState?: () => Promise<unknown>
@@ -134,7 +137,10 @@ const SCAN_TIMEOUT_MS = 10_000
 /** Changing the volume of a playing track: the stage can only fade up from silence, so keep it short. */
 const VOLUME_FADE_S = 0.5
 
-/** Used when the pack has no such prompt file (an operator's override folder cannot remove one, so this is a safety net). */
+/**
+ * Used when the pack has no such prompt file. An operator's override folder cannot remove one, so this is a safety net;
+ * the documented defaults are the files in `modes/sleep/prompts/`.
+ */
 const FALLBACK_REPLY_LINE =
   '(Sleep time. Answer the message marked 【助眠】 in one or two very short whispered sentences and wish them a good night. No questions, no exclamations, no emoji, no motion tags.)'
 const FALLBACK_TEST_LINE = '闭上眼睛，慢慢呼吸，晚安。'
@@ -789,7 +795,7 @@ export function createSleepController(
             typeof req.row === 'string' ? req.row : typeof req.track === 'string' ? req.track : null
           if (name !== null) {
             await refresh(true)
-            if (!find(name)) return refuse(`there is no track "${name}"`)
+            if (!find(name)) return refuse(`there is no track "${clip(name, 60)}"`)
           }
           const r = run
           if (r) {

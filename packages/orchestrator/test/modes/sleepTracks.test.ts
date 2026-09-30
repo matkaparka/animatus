@@ -88,6 +88,21 @@ describe('what is a track', () => {
     ])
   })
 
+  it('names with spaces and Chinese characters are kept as they are, in a folder too', async () => {
+    const root = await library({
+      '雨 声.mp3': 'x',
+      '雨 声.json': timing([{ text: '闭上眼睛', start: 0, end: 2 }]),
+      '夜晚/海边 1.wav': 'x',
+    })
+    const { tracks, skipped } = await scanSleepTracks(root)
+    expect(tracks.map((t) => [t.key, t.parts])).toEqual([
+      ['夜晚/海边 1', ['夜晚', '海边 1.wav']],
+      ['雨 声', ['雨 声.mp3']],
+    ])
+    expect(tracks[1]!.captions).toEqual([{ text: '闭上眼睛', start: 0, end: 2 }])
+    expect(skipped).toEqual([])
+  })
+
   it('an empty file is left out with the reason, but does not hide another format of the same track', async () => {
     const root = await library({ 'a.mp3': '', 'a.wav': 'x', 'b.mp3': '', 'c.wav': 'x' })
     const { tracks, skipped } = await scanSleepTracks(root)

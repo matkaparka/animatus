@@ -41,6 +41,8 @@ interface SleepRigOptions {
   dances?: boolean
   /** More mode packs (folders holding `<id>/mode.yaml` or just prompts). */
   extraModes?: string[]
+  /** Files to add to the asmr folder, by relative path. */
+  extraTracks?: Record<string, string>
 }
 
 /** A rig with the sleep mode on, an asmr folder, a whisper voice, a night background, and chat replies that come quickly. */
@@ -49,7 +51,7 @@ function sleepRig(over: SleepRigOptions = {}): RigOptions {
     app: { modesDirs: [MODES, ...(over.extraModes ?? [])] },
     prepare: async (dir) => {
       const asmr = path.join(dir, 'asmr')
-      for (const [name, body] of Object.entries(TRACKS)) {
+      for (const [name, body] of Object.entries({ ...TRACKS, ...over.extraTracks })) {
         await mkdir(path.dirname(path.join(asmr, name)), { recursive: true })
         await writeFile(path.join(asmr, name), body)
       }
@@ -368,6 +370,40 @@ describe('sleep mode, through the whole program', () => {
     expect(r.app.modes.state('sleep')).toBe('IDLE')
     await until(() => probe.ofType('sleep.stop').length >= 1, 3000)
     expect(r.app.flags.sleeping).toBe(false)
+  })
+
+  it('a track whose name needs escaping (Chinese characters, a space, a folder) is played from a URL the asset route serves, with its captions', async () => {
+    const title = '雨 声'
+    const r = await rig(
+      sleepRig({
+        extraTracks: {
+          [`${title}.mp3`]: 'not really audio',
+          [`${title}.json`]: JSON.stringify({ lines: [{ text: '闭上眼睛', start: 1, end: 3 }] }),
+          '夜晚/海边 1.ogg': 'not really audio',
+        },
+      })
+    )
+    const { probe } = await page(r)
+    await r.app.modeAction('sleep', 'enter', { ...NO_FLAGS, params: { track: title } })
+    await until(() => probe.ofType('sleep.play').length >= 1, 3000, 'sleep.play')
+    const play = probe.ofType('sleep.play')[0]!
+    expect(play.url).toBe('/asset/asmr/%E9%9B%A8%20%E5%A3%B0.mp3')
+    expect(play.captions).toEqual([{ text: '闭上眼睛', start: 1, end: 3 }])
+    const got = await fetch(new URL(String(play.url), r.app.stage.url))
+    expect(got.status).toBe(200)
+    expect(await got.text()).toBe('not really audio')
+
+    // and one in a folder, found by its name with the folder in front
+    await r.app.modeAction('sleep', 'act', {
+      ...NO_FLAGS,
+      params: { action: 'play', row: '夜晚/海边 1' },
+    })
+    await until(() => probe.ofType('sleep.play').length >= 2, 3000, 'the second track')
+    const inFolder = probe.ofType('sleep.play')[1]!
+    expect(inFolder.url).toBe(
+      `/asset/asmr/${encodeURIComponent('夜晚')}/${encodeURIComponent('海边 1.ogg')}`
+    )
+    expect((await fetch(new URL(String(inFolder.url), r.app.stage.url))).status).toBe(200)
   })
 
   it('sleep interrupts a dance that is running, and then no dance can start', async () => {
