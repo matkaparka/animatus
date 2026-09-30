@@ -1,0 +1,40 @@
+manifest_version: 1
+id: screencap
+title: Screen capture
+description: >-
+  Returns one window (a game, a browser) as a small JPEG for the screen commentary mode. Windows only. The window
+  is captured by its handle, so it may lie behind other windows, but it must not be minimised or in exclusive
+  fullscreen. Nothing is written to disk.
+version: 0.1.0
+kind: custom
+service: screencap
+provides: [screen.capture]
+
+runtime:
+  type: process
+  env: light                 # standard library and Pillow only
+  command: ["{python}", "service.py", "--port", "{port}"]
+  cwd: "{plugin_dir}"
+  port: auto
+  guard: true
+  stop:
+    http: { method: POST, path: /shutdown }
+    grace_ms: 3000
+
+health:
+  http: { path: /health }
+  start_timeout_ms: 20000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+restart:
+  policy: on-failure
+  max_restarts: 3
+  backoff_ms: [1000, 5000, 15000]
+
+resources:
+  gpu: false
+  vram_mb_est: null
+  ram_mb_est: null
+  note: Copies pixels with GDI and encodes them on the CPU; no GPU memory is used.
