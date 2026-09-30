@@ -115,13 +115,21 @@ describe('with a token', () => {
     expect(screen.queryByText(/live connection is down/)).toBeNull()
   })
 
-  it('has five tabs, Run first, and switches between them', async () => {
+  it('has six tabs, Run first, and switches between them', async () => {
     renderApp()
     await screen.findByRole('heading', { name: 'Stage' })
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Run', 'Plugins', 'Modes', 'Settings', 'Keys'])
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      'Run',
+      'Plugins',
+      'Modes',
+      'Memory',
+      'Settings',
+      'Keys',
+    ])
     expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual([
       'true',
+      'false',
       'false',
       'false',
       'false',

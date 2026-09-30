@@ -36,6 +36,7 @@ export function isSpeakable(text: string): boolean {
  */
 export class SpeechFilter {
   private re: RegExp | null = null
+  private test: RegExp | null = null
   /** Called with the matched word for each replacement (for the run log). */
   onReplace?: (word: string) => void
 
@@ -48,9 +49,14 @@ export class SpeechFilter {
 
   setWords(words: readonly string[]): void {
     const cleaned = words.map((w) => w.trim()).filter(Boolean)
-    this.re = cleaned.length
-      ? new RegExp(cleaned.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'gi')
-      : null
+    const source = cleaned.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+    this.re = cleaned.length ? new RegExp(source, 'gi') : null
+    this.test = cleaned.length ? new RegExp(source, 'i') : null
+  }
+
+  /** True when the text has a word of the list in it (nothing is replaced, nothing is reported). */
+  contains(text: string): boolean {
+    return this.test ? this.test.test(text) : false
   }
 
   get size(): number {

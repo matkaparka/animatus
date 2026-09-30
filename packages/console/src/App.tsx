@@ -4,6 +4,7 @@ import { ApiClientError, createApi } from './api.ts'
 import type { Api } from './api.ts'
 import { Pill } from './components.tsx'
 import { Keys } from './Keys.tsx'
+import { Memory } from './Memory.tsx'
 import { createLive } from './live.ts'
 import type { Live, LiveOptions } from './live.ts'
 import { Modes } from './Modes.tsx'
@@ -12,12 +13,13 @@ import { Run } from './Run.tsx'
 import { Settings } from './Settings.tsx'
 import { initialState, reducer } from './state.ts'
 
-type TabId = 'run' | 'plugins' | 'modes' | 'settings' | 'keys'
+type TabId = 'run' | 'plugins' | 'modes' | 'memory' | 'settings' | 'keys'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string }> = [
   { id: 'run', label: 'Run' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'modes', label: 'Modes' },
+  { id: 'memory', label: 'Memory' },
   { id: 'settings', label: 'Settings' },
   { id: 'keys', label: 'Keys' },
 ]
@@ -218,6 +220,7 @@ function Console({
         {...(state.status?.stage.url ? { assetBase: state.status.stage.url } : {})}
       />
     ),
+    memory: <Memory api={api} />,
     settings: <Settings api={api} />,
     keys: <Keys api={api} />,
   }

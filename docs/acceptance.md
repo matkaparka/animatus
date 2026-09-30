@@ -98,6 +98,33 @@ Not yet done: nothing for P2.
   own tests and was seen in the P1 run); the other modes (sleep, sing, draw, commentary, game) have no controller
   yet; the console has no dance list or tuning panel yet (the API for both exists).
 
+## P4: memory
+
+Pass criteria: a human edit of one line is in effect in the next sentence; rollback works; recall latency has a
+measured number.
+
+- **An edit is in the next reply, a rollback too.** End to end through the real application (a real stage server, a
+  scripted stage page and model, the real memory store with real git): the streamer's line about the channel mascot
+  is in the prompt of the first reply; one line changed through the store as the console does it is in the next reply
+  and the old text is not; rolling the file back is in the reply after that. The same for a rule in memory's
+  `persona/` folder. Also through the console's own HTTP routes (12 tests) and, by hand, in the console page of a
+  running application: edit an agent line (it becomes the streamer's), lock a line, read the history, see the changes
+  of one commit, restore the first version, approve a proposal, forget a viewer.
+- **Recall latency** (synthetic memory, keyword search, 2,000 lookups each): 300 viewers (302 files, about 2,700
+  lines) median 0.10 ms, 95th percentile 0.26 ms, slowest 0.9 ms; 3,000 viewers (3,002 files, about 27,000 lines)
+  median 0.64 ms, 95th percentile 2.7 ms, slowest 5.7 ms; building that index at start-up takes 3.2 s.
+- **The rules hold** (tests of the store): the program cannot change or remove a line the streamer wrote (locked or
+  not) nor a viewer's; a stale hash or a line that moved is a conflict, never an overwrite; a viewer's words cannot
+  carry a marker or a source tag of their own; "forget me" leaves nothing (viewer files are not in the history); the
+  consolidation pass throws away a fact whose quote is not in the viewer's messages and anything the sensitive-word
+  list matches, and a message that gives orders changes nothing.
+- The tests found and fixed: a rollback to a revision that does not exist was taken for "the file did not exist then"
+  and deleted the file; two settings of the tokenizer that made ordinary Chinese wording miss ("你养猫吗" did not find
+  "养了一只猫"); an absolute score threshold that let nothing through on a small memory; the streamer's edit being
+  committed after the call returned (so a fast second edit was folded into the first commit).
+- Not done: an embedding model for recall (keyword search only); memory facts from other modes (a song a viewer asked
+  for); a soak of the consolidation pass against a real model on a real stream's inbox.
+
 ## P0
 
 VRAM measurements are in [vram-measurements.md](vram-measurements.md).

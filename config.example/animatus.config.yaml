@@ -120,6 +120,15 @@ modes:
       outro_window_sec: 8          # after the dance the model has this long to start its closing line
       start_timeout_sec: 30        # the stage must report the dance as playing within this long
 
+# What the character remembers between streams (docs/memory.md). Off by default: it keeps what viewers say about
+# themselves. Files are Markdown under data/memory; the console's Memory tab edits them.
+memory:
+  enabled: false
+  # dir: ./data/memory
+  record_chat: true                # chat messages that reach the model go to the inbox for the consolidation pass
+  recall: { max_lines: 8, max_chars: 900, per_speaker: 5, search_cache_days: 7 }
+  consolidate: { every_hours: 0, max_viewers: 30, min_messages: 2, max_facts: 5, stream_notes: true }   # 0 hours: only when asked
+
 # The graphics memory modes are admitted against.
 vram:
   # budget_mb: 12000               # leave out to read the card's size

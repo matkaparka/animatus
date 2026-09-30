@@ -10,6 +10,14 @@ import {
   ApiError,
   ConfigResponse,
   EventsResponse,
+  MemoryConsolidateReport,
+  MemoryFileView,
+  MemoryForgetResponse,
+  MemoryHashResponse,
+  MemoryHistoryResponse,
+  MemoryProposalsResponse,
+  MemoryStatusView,
+  MemoryTreeResponse,
   ModeView,
   ModesResponse,
   OkResponse,
@@ -22,6 +30,11 @@ import {
 } from '@animatus/protocol'
 import type {
   InjectRequest,
+  MemoryCommit,
+  MemoryLineRequest,
+  MemoryProposal,
+  MemoryTreeEntry,
+  MemoryWriteRequest,
   ModeAction,
   ModeRequest,
   PluginAction,
@@ -59,6 +72,20 @@ export interface Api {
   events(limit?: number): Promise<RunEvent[]>
   traces(limit?: number): Promise<SpeechTraceView[]>
   config(): Promise<Record<string, unknown>>
+
+  // memory (the routes answer `memory_off` when it is switched off, except the status)
+  memoryStatus(): Promise<MemoryStatusView>
+  memoryTree(): Promise<MemoryTreeEntry[]>
+  memoryFile(path: string): Promise<MemoryFileView>
+  memoryWrite(request: MemoryWriteRequest): Promise<string>
+  memoryLine(request: MemoryLineRequest): Promise<string>
+  memoryHistory(path: string | null): Promise<MemoryCommit[]>
+  memoryDiff(path: string, from: string, to?: string): Promise<string>
+  memoryRollback(path: string, rev: string): Promise<void>
+  memoryForget(uid: number): Promise<boolean>
+  memoryConsolidate(): Promise<MemoryConsolidateReport>
+  memoryProposals(): Promise<MemoryProposal[]>
+  memoryResolve(id: string, approve: boolean): Promise<void>
 }
 
 export interface ApiOptions {
@@ -182,6 +209,42 @@ export function createApi(options: ApiOptions): Api {
     deleteSecret: (name) => json(SecretView, 'DELETE', `/api/secrets/${enc(name)}`),
     async say(request) {
       await json(OkResponse, 'POST', '/api/say', request)
+    },
+    memoryStatus: () => json(MemoryStatusView, 'GET', '/api/memory'),
+    async memoryTree() {
+      return (await json(MemoryTreeResponse, 'GET', '/api/memory/tree')).files
+    },
+    memoryFile: (path) => json(MemoryFileView, 'GET', `/api/memory/file?path=${enc(path)}`),
+    async memoryWrite(request) {
+      return (await json(MemoryHashResponse, 'PUT', '/api/memory/file', request)).hash ?? ''
+    },
+    async memoryLine(request) {
+      return (await json(MemoryHashResponse, 'POST', '/api/memory/line', request)).hash ?? ''
+    },
+    async memoryHistory(path) {
+      const q = path === null ? '' : `?path=${enc(path)}`
+      return (await json(MemoryHistoryResponse, 'GET', `/api/memory/history${q}`)).commits
+    },
+    async memoryDiff(path, from, to) {
+      const q = `?path=${enc(path)}&from=${enc(from)}${to ? `&to=${enc(to)}` : ''}`
+      return await (await send('GET', `/api/memory/diff${q}`)).text()
+    },
+    async memoryRollback(path, rev) {
+      await json(MemoryHashResponse, 'POST', '/api/memory/rollback', { path, rev })
+    },
+    async memoryForget(uid) {
+      return (await json(MemoryForgetResponse, 'POST', '/api/memory/forget', { uid })).existed
+    },
+    memoryConsolidate: () => json(MemoryConsolidateReport, 'POST', '/api/memory/consolidate'),
+    async memoryProposals() {
+      return (await json(MemoryProposalsResponse, 'GET', '/api/memory/proposals')).proposals
+    },
+    async memoryResolve(id, approve) {
+      await json(
+        OkResponse,
+        'POST',
+        `/api/memory/proposals/${enc(id)}/${approve ? 'approve' : 'reject'}`
+      )
     },
     async inject(request) {
       await json(OkResponse, 'POST', '/api/inject', request)

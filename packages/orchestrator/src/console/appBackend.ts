@@ -28,7 +28,8 @@ import { AppError } from '../app/errors.ts'
 import { publicConfig, secretRefs } from '../config.ts'
 import { PluginDisabledError, UnknownPluginError } from '../plugins/supervisor.ts'
 import { SecretStoreError } from '../plugins/secrets.ts'
-import { ApiFailure, type ConsoleBackend } from './backend.ts'
+import { ApiFailure, type ConsoleBackend, type MemoryBackend } from './backend.ts'
+import { createMemoryBackend } from './memoryBackend.ts'
 
 export interface AppBackendOptions {
   version?: string
@@ -36,12 +37,15 @@ export interface AppBackendOptions {
 
 export class AppBackend implements ConsoleBackend {
   private readonly version: string
+  /** The memory routes; absent when `memory.enabled` is off. */
+  readonly memory?: MemoryBackend
 
   constructor(
     private readonly app: App,
     options: AppBackendOptions = {}
   ) {
     this.version = options.version ?? '0.1.0'
+    if (app.memory) this.memory = createMemoryBackend(app.memory)
   }
 
   // ─────────────────────────────── status ───────────────────────────────

@@ -861,3 +861,122 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* The memory page: files on the left, the lines of the chosen file on the right. */
+.memory .mem-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .memory .mem-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mem-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mem-section h3 {
+  margin: 0 0 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mem-section ul {
+  margin: 0;
+  padding: 0;
+}
+
+.mem-file {
+  width: 100%;
+  text-align: left;
+}
+
+.mem-file-on {
+  outline: 2px solid var(--accent);
+}
+
+.mem-file-view {
+  min-width: 0;
+}
+
+.mem-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.mem-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--card-2);
+}
+
+.mem-note {
+  background: transparent;
+  color: var(--muted);
+}
+
+.mem-what {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.mem-body {
+  overflow-wrap: anywhere;
+}
+
+.mem-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mem-edit {
+  flex: 1 1 20rem;
+  min-width: 10rem;
+}
+
+.mem-commit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 4px 0;
+}
+
+.mem-diff {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--card-2);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.mem-proposal {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}

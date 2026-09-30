@@ -29,7 +29,7 @@ import type { LlmLike } from '../brain/brain.ts'
 import { ChatLog } from '../brain/chatlog.ts'
 import { parseConfig, secretRefs, toProviderConfig } from '../config.ts'
 import type { AppConfig, LlmProviderEntry } from '../config.ts'
-import { Blocklist, Pacer, Router, emptyBlocklist } from '../inbox/index.ts'
+import { Blocklist, FORMATS, Pacer, Router, emptyBlocklist } from '../inbox/index.ts'
 import type { BlockChecker, PacerState } from '../inbox/index.ts'
 import { LlmError, LlmGateway, createLlmProvider } from '../llm/index.ts'
 import type { ChatMessage } from '../llm/types.ts'
@@ -65,6 +65,7 @@ import { SpeechFilter } from '../tts/text.ts'
 import type { TtsAdapter, VramMeasurement } from '@animatus/protocol'
 import { AlarmBoard, RunLog, TraceBoard } from './board.ts'
 import { AppError } from './errors.ts'
+import { MemoryService } from '../memory/service.ts'
 import { builtinControllers } from '../modes/controllers/index.ts'
 import { GpuMeter } from '../modes/gpu.ts'
 import type { ActivityFlags, LlmTextRequest, ModeHost } from '../modes/host.ts'
@@ -145,6 +146,8 @@ export class App {
   readonly flags: ActivityFlags = { dancing: false, singing: false, sleeping: false }
   readonly gpu = new GpuMeter()
   readonly modes: ModeService
+  /** What the character remembers between streams; null when `memory.enabled` is off. */
+  readonly memory: MemoryService | null
   private libraryDirs: Readonly<Record<string, string>> = {}
   private measurements: VramMeasurement[] = []
   private measurementTimer: NodeJS.Timeout | null = null
@@ -245,10 +248,15 @@ export class App {
       llm: { stream: (req) => this.currentLlm().stream(req) },
       director: this.director,
       chat: this.chat,
-      persona: () => this.personaText,
+      // the persona file, then the rules the streamer keeps in memory's persona/ folder (live: an edit there is in the next prompt)
+      persona: () => {
+        const extra = this.memory?.store.personaText() ?? ''
+        return extra ? `${this.personaText}\n\n${extra}` : this.personaText
+      },
       motionTags: () => this.motions?.promptTagList() ?? [],
       resolveMotion: (tag) => this.motions?.pick(tag) ?? null,
       modePrompts: () => this.modes.prompts(),
+      memory: (input) => this.memory?.recall(input.text, input.viewers ?? []) ?? [],
       historyMessages: config.llm.history_messages,
       firstCommaMinChars: config.speech.first_comma_min_chars,
       ...(config.llm.temperature !== undefined ? { temperature: config.llm.temperature } : {}),
@@ -260,13 +268,54 @@ export class App {
       now: this.now,
     })
 
+    // ── memory
+    const mem = config.memory
+    this.memory = mem.enabled
+      ? new MemoryService({
+          store: { root: mem.dir ?? path.join(config.paths.data_dir, 'memory') },
+          recall: {
+            maxLines: mem.recall.max_lines,
+            maxChars: mem.recall.max_chars,
+            perSpeaker: mem.recall.per_speaker,
+            searchCacheDays: mem.recall.search_cache_days,
+          },
+          llmText: (req) =>
+            this.llmText({
+              tag: req.tag,
+              system: req.system,
+              user: req.user,
+              ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+              ...(req.maxOutputTokens !== undefined
+                ? { maxOutputTokens: req.maxOutputTokens }
+                : {}),
+            }),
+          isSensitive: (text) => filter.contains(text),
+          tell: (text) =>
+            void this.brain
+              .respond({ text, source: 'system', trust: 'privileged' })
+              .catch((e) => this.logger('error', `brain: ${firstLine(e)}`)),
+          alarm: (code, message) => void this.alarms.raise(code, 'warn', message, 'memory'),
+          clearAlarm: (code) => void this.alarms.clear(code, 'memory'),
+          log: (level, msg) => this.logger(level, msg),
+          now: this.now,
+          consolidateEveryHours: mem.consolidate.every_hours,
+          consolidate: {
+            maxViewers: mem.consolidate.max_viewers,
+            minMessages: mem.consolidate.min_messages,
+            maxFacts: mem.consolidate.max_facts,
+            searchCacheDays: mem.recall.search_cache_days,
+            streamNotes: mem.consolidate.stream_notes,
+          },
+        })
+      : null
+
     // ── inbox
     this.router = new Router(config.inbox, parts.blocklist, {
       now: this.now,
       log: (level, msg, extra) => this.logger(level, `inbox: ${msg}`, extra),
       onDrop: (reason, info) =>
         this.logger('debug', `inbox: dropped (${reason})`, { ...info, text: undefined }),
-      onChatCommand: (cmd) => this.modes.chatCommand(cmd),
+      onChatCommand: (cmd) => this.memory?.chatCommand(cmd) === true || this.modes.chatCommand(cmd),
       onSongCommand: (cmd) =>
         void this.modes
           .songCommand(cmd)
@@ -752,14 +801,54 @@ export class App {
     } catch (e) {
       this.logger('error', `modes: ${(e as Error).message}`)
     }
+    const viewers = this.recordBatch(batch)
     await this.brain
       .respond({
         text,
         source: 'viewer',
         trust: 'untrusted',
         ...(extras.length > 0 ? { extras } : {}),
+        ...(viewers.length > 0 ? { viewers } : {}),
       })
       .catch((e) => this.logger('error', `brain: ${(e as Error).message}`))
+  }
+
+  /**
+   * Who wrote what is in this batch: for the brain (what is remembered about them) and, when memory is on, for the
+   * inbox and for the facts that need no model (someone joined the crew).
+   */
+  private recordBatch(
+    batch: Parameters<ModeService['batchExtras']>[0]
+  ): { uid: number; name: string }[] {
+    const viewers = new Map<number, string>()
+    for (const part of batch.parts) {
+      if (part.uid === undefined || part.uid <= 0 || part.uname === undefined) continue
+      viewers.set(part.uid, part.uname)
+      if (!this.memory) continue
+      if (part.kind === 'danmaku' || part.kind === 'sleep') {
+        const prefix =
+          part.kind === 'sleep'
+            ? FORMATS.sleepPrefix + part.uname + '：'
+            : FORMATS.danmaku(part.uname, '')
+        if (this.config.memory.record_chat && part.text.startsWith(prefix))
+          this.memory.record({
+            kind: 'chat',
+            uid: part.uid,
+            name: part.uname,
+            text: part.text.slice(prefix.length),
+          })
+      } else if (part.kind === 'guard') {
+        this.memory.noteViewer(
+          part.uid,
+          part.uname,
+          part.text
+            .replace(/^【[^】]*】/, '')
+            .replace(part.uname, '')
+            .trim()
+        )
+      }
+    }
+    return [...viewers].map(([uid, name]) => ({ uid, name }))
   }
 
   private onSourceEvent(e: BilibiliSourceEvent): void {
@@ -1234,6 +1323,9 @@ export class App {
     this.measurementTimer = setInterval(() => void this.reloadMeasurements(), 30_000)
     this.measurementTimer.unref?.()
     this.modes.attach()
+    await this.memory
+      ?.start()
+      .catch((e) => this.alarms.raise('memory', 'error', `memory could not start: ${firstLine(e)}`))
 
     // Services start in the background: a speech server takes a minute to load and must not hold everything up.
     for (const entry of this.registry.enabled(this.config.plugins)) {
@@ -1339,6 +1431,7 @@ export class App {
     this.brain.cancelActive('shutdown')
     if (this.measurementTimer) clearInterval(this.measurementTimer)
     await this.modes.dispose()
+    await this.memory?.stop().catch(() => undefined)
     this.gpu.stop()
     this.director.dispose()
     for (const d of this.disposers.splice(0)) d()

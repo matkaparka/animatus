@@ -203,6 +203,36 @@ const ModeEntry = z.strictObject({
   config: z.record(z.string(), z.unknown()).default({}),
 })
 
+/**
+ * What the character remembers between streams: viewers, the stream, the world, in Markdown files the streamer can edit.
+ * Off by default because it keeps what viewers say about themselves.
+ */
+const Memory = z.strictObject({
+  enabled: z.boolean().default(false),
+  /** The folder; default `<data_dir>/memory`. */
+  dir: z.string().min(1).optional(),
+  /** Put the chat messages that reach the model in the inbox, for the consolidation pass to read. */
+  record_chat: z.boolean().default(true),
+  recall: z
+    .strictObject({
+      max_lines: z.number().int().min(1).max(30).default(8),
+      max_chars: z.number().int().min(100).max(4000).default(900),
+      per_speaker: z.number().int().min(1).max(20).default(5),
+      search_cache_days: z.number().int().min(1).max(365).default(7),
+    })
+    .prefault({}),
+  consolidate: z
+    .strictObject({
+      /** Run the pass by itself every this many hours; 0 means only when the console asks. */
+      every_hours: z.number().min(0).max(168).default(0),
+      max_viewers: z.number().int().min(1).max(200).default(30),
+      min_messages: z.number().int().min(1).max(50).default(2),
+      max_facts: z.number().int().min(1).max(20).default(5),
+      stream_notes: z.boolean().default(true),
+    })
+    .prefault({}),
+})
+
 /** Graphics memory the modes are admitted against. */
 const Vram = z.strictObject({
   /** Dedicated memory of the card in MiB; leave out to read it from nvidia-smi. */
@@ -247,6 +277,7 @@ export const AppConfigSchema = z.strictObject({
   plugins: z.record(PluginId, PluginEntry).default({}),
   modes: z.record(PluginId, ModeEntry).default({}),
   vram: Vram.prefault({}),
+  memory: Memory.prefault({}),
   console: Console.prefault({}),
 })
 export type AppConfigInput = z.input<typeof AppConfigSchema>

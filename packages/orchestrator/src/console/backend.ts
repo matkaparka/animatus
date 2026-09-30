@@ -16,6 +16,14 @@
  */
 import type {
   InjectRequest,
+  MemoryCommit,
+  MemoryConsolidateReport,
+  MemoryFileView,
+  MemoryLineRequest,
+  MemoryProposal,
+  MemoryStatusView,
+  MemoryTreeEntry,
+  MemoryWriteRequest,
   ModeAction,
   ModeRequest,
   ModeView,
@@ -58,7 +66,30 @@ export class ApiFailure extends Error {
   }
 }
 
+/**
+ * What the memory routes need. Optional on the backend: without it (memory switched off) the memory routes answer
+ * `memory_off`. Refusals are `ApiFailure`s like everywhere else: 409 for a conflict (the file changed since it was
+ * read), 403 for what the streamer's rules forbid, 404 for a missing file.
+ */
+export interface MemoryBackend {
+  status(): Awaitable<MemoryStatusView>
+  tree(): Awaitable<MemoryTreeEntry[]>
+  readFile(path: string): Awaitable<MemoryFileView>
+  writeFile(req: MemoryWriteRequest): Awaitable<{ hash: string }>
+  line(req: MemoryLineRequest): Awaitable<{ hash: string }>
+  history(path: string | null, limit: number): Awaitable<MemoryCommit[]>
+  diff(path: string, from: string, to?: string): Awaitable<string>
+  rollback(path: string, rev: string): Awaitable<{ hash: string | null }>
+  forget(uid: number): Awaitable<{ existed: boolean }>
+  consolidate(): Awaitable<MemoryConsolidateReport>
+  proposals(): Awaitable<MemoryProposal[]>
+  resolveProposal(id: string, approve: boolean): Awaitable<void>
+}
+
 export interface ConsoleBackend {
+  /** The memory routes (`/api/memory...`); absent when memory is off. */
+  readonly memory?: MemoryBackend
+
   /** `GET /api/status`, and the payload of the `status` event pushed every two seconds. */
   status(): Awaitable<StatusView>
 

@@ -54,6 +54,8 @@ export interface BrainInput {
   name?: string
   /** One-off prompt blocks for this reply only (for example a note about a gift). */
   extras?: readonly string[]
+  /** The audience members whose messages this reply answers, for looking up what is remembered about them. */
+  viewers?: readonly { uid: number; name: string }[]
   /** Pictures the model should look at for this reply (a screenshot, a drawing). They are not kept in the record. */
   images?: readonly { mime: string; base64: string }[]
   /** Cancel the reply being generated (and its speech) before starting this one. */
