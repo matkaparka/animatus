@@ -205,7 +205,8 @@ describe('starting and stopping', () => {
 
   it('stopAll() also cancels plugins that are still starting or waiting to restart', async () => {
     const dir = await makeTempDir()
-    const slow = fakeEntry(dir, { id: 'slow', args: ['--startup-delay', '1500'] })
+    // still starting when stopAll runs, even on a machine so busy that the other plugin takes seconds to start and exit
+    const slow = fakeEntry(dir, { id: 'slow', args: ['--startup-delay', '6000'] })
     const crashing = fakeEntry(dir, {
       id: 'crashing',
       args: ['--exit-after', '10'],

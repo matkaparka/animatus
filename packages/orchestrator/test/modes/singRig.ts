@@ -270,6 +270,7 @@ export async function singRig(
     busy: () => false,
     tellBrain: async (text) => {
       told.push(text)
+      return { status: 'done', sentences: 1 }
     },
     brainBusy: () => brain.busy,
     serviceUrl: (s) => (s === 'singing' && serviceUp.value ? fake.url : null),
