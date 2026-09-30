@@ -378,5 +378,6 @@ Nothing is needed to run the mode. These would make it better; none was made her
 4. `releaseServices` stops a `process` plugin when the last mode that needs it is left, so the window list is empty
    between runs. A manifest flag to keep a cheap service running while it is enabled would let the operator pick the
    window before entering the mode.
-5. `test/app/modes.test.ts` (dance end to end) assumed its pack was the only one in `modes/`; two assertions were
-   changed to look for the dance view by id. Every new pack needs the same change.
+5. `test/app/modes.test.ts` (dance end to end) assumed its pack was the only one in `modes/`, so it broke as soon as
+   this pack existed; two assertions were changed to look for the dance view by id. Any other branch that adds a pack
+   hits the same failure and will change the same two lines: keep either version when merging.
