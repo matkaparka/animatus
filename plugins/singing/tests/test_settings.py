@@ -52,6 +52,12 @@ class ParseSettings(unittest.TestCase):
         self.assertEqual(s.ncm.min_interval_sec, 4.0)
         self.assertEqual(s.transpose.overrides, {'186016': -12})
 
+    def test_song_ids_may_be_written_as_numbers_but_other_text_may_not(self):
+        s = parse_settings({'queue': {'blacklist_ids': [3, 'x']}})
+        self.assertEqual(s.queue.blacklist_ids, ['3', 'x'])
+        with self.assertRaisesRegex(SettingsError, r'mix\.mp3_bitrate: expected text'):
+            parse_settings({'mix': {'mp3_bitrate': 192}})  # 192 would mean 192 bit/s to ffmpeg
+
     def test_not_a_number_is_refused(self):
         with self.assertRaisesRegex(SettingsError, r'not a finite number'):
             parse_settings({'ncm': {'timeout_sec': float('nan')}})

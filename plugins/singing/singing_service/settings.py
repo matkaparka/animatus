@@ -31,8 +31,8 @@ def _opt(default: Any, lo: float | None = None, hi: float | None = None, choices
     return field(default=default, metadata={'lo': lo, 'hi': hi, 'choices': choices})
 
 
-def _seq(factory: Any) -> Any:
-    return field(default_factory=factory, metadata={})
+def _seq(factory: Any, coerce_numbers: bool = False) -> Any:
+    return field(default_factory=factory, metadata={'coerce_numbers': coerce_numbers})
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,8 @@ class Queue:
     max_per_user: int = _opt(1, 1, 20)
     max_len: int = _opt(5, 1, 100)
     repeat_cooldown_min: float = _opt(30.0, 0.0, 1440.0)
-    blacklist_ids: list[str] = _seq(list)
+    #: Song ids; YAML reads an unquoted 186016 as a number, which is accepted here.
+    blacklist_ids: list[str] = _seq(list, coerce_numbers=True)
     blacklist_keywords: list[str] = _seq(list)
     #: After a restart only requests newer than this come back: last show's queue must not start singing at start-up.
     restore_within_min: float = _opt(20.0, 0.0, 1440.0)
@@ -217,6 +218,8 @@ def _check(value: Any, typ: Any, meta: Any, where: str) -> Any:
             raise SettingsError(f'{where}: {number} is above the maximum {hi}')
         return number
     if typ is str:
+        if meta.get('coerce_numbers') and isinstance(value, int) and not isinstance(value, bool):
+            value = str(value)
         if not isinstance(value, str):
             raise SettingsError(f'{where}: expected text, got {value!r}')
         choices = meta.get('choices')
@@ -227,7 +230,7 @@ def _check(value: Any, typ: Any, meta: Any, where: str) -> Any:
         if not isinstance(value, list):
             raise SettingsError(f'{where}: expected a list, got {value!r}')
         (inner,) = get_args(typ)
-        return [_check(item, inner, {}, f'{where}[{i}]') for i, item in enumerate(value)]
+        return [_check(item, inner, meta, f'{where}[{i}]') for i, item in enumerate(value)]
     if origin is dict:
         if not isinstance(value, dict):
             raise SettingsError(f'{where}: expected a mapping, got {value!r}')
