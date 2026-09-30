@@ -37,7 +37,7 @@ describe('a round', () => {
     // the first picture is used to identify the game: one plain question with the picture attached
     const [identify] = r.llm('commentary-identify')
     expect(r.f.llm.requests).toHaveLength(1)
-    expect(identify).toMatchObject({ temperature: 0.2, maxOutputTokens: 300, timeoutMs: 30_000 })
+    expect(identify).toMatchObject({ temperature: 0.2, maxOutputTokens: 1024, timeoutMs: 30_000 })
     expect(identify?.signal).toBeInstanceOf(AbortSignal)
     expect(identify?.system).toBeUndefined()
     const asked = parts(identify as never)

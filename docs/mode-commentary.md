@@ -78,7 +78,8 @@ it), the gain is a comment that already knows the game and what changed.
 
 ### Cost per comment (by construction, not measured)
 
-One capture (CPU only). One reading call: the picture plus about 250 tokens of prompt, at most 300 tokens back. One
+One capture (CPU only). One reading call: the picture plus about 250 tokens of prompt, and a line or two back (the
+limit is 1024 tokens, so that a model that thinks first, on a provider that counts thinking against it, still has room). One
 comment call: the persona prompt, the history (`llm.history_messages`, so about the last five comments are in it: each
 comment adds its instruction and the reply to the chat record, never the picture) and the picture. Then, now and
 then, an identification call (first picture, unsure, switch, every 15 minutes, on demand) and a story call every 10

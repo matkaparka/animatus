@@ -16,6 +16,13 @@ import type { MemoryStore } from './store.ts'
 
 type IdentifyReason = 'first' | 'unsure' | 'switch' | 'timer' | 'manual'
 
+/**
+ * The answers are a line or two, but some providers count a model's thinking against the same limit, and an answer
+ * that has no room left is empty. The limit is only a guard against a runaway reply, so it is generous.
+ */
+const ANSWER_TOKENS = 1024
+const STORY_TOKENS = 2048
+
 /** What a pass knows about the run it belongs to: whether it is still wanted, and how to cancel what it asked for. */
 export interface Live {
   readonly signal: AbortSignal
@@ -80,7 +87,7 @@ export function createReader(d: {
       tag,
       user,
       temperature: 0.2,
-      maxOutputTokens: 300,
+      maxOutputTokens: ANSWER_TOKENS,
       timeoutMs: cfg.model_timeout_sec * 1000,
       signal: live.signal,
     })
@@ -206,7 +213,7 @@ export function createReader(d: {
         tag: 'commentary-summary',
         user: text,
         temperature: 0.3,
-        maxOutputTokens: 800,
+        maxOutputTokens: STORY_TOKENS,
         timeoutMs: cfg.model_timeout_sec * 1000,
         signal: live.signal,
       })
