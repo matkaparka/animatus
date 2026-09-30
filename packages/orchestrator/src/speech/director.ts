@@ -191,6 +191,7 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
   private latestTurn: string | null = null
   private disabledTurns = new Set<string>()
   private holds = new Set<string>()
+  private styleOverride: string | null = null
   private epoch = 0
   private seq = 0
   private counter = 0
@@ -278,6 +279,15 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
 
   get held(): boolean {
     return this.holds.size > 0
+  }
+
+  /**
+   * Speak everything in this voice style (a reference recording, for example `whisper`) whatever the sentence's
+   * emotion says; null goes back to the emotion's own style. The face still follows the emotion. Applies to
+   * sentences not yet synthesised.
+   */
+  setStyleOverride(style: string | null): void {
+    this.styleOverride = style
   }
 
   /** Re-evaluate the pipeline after something outside changed (the stage connected, a hold ended). */
@@ -371,7 +381,7 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
       try {
         stream = await this.o.tts.synthesize({
           text: e.text,
-          style: e.item.style ?? 'neutral',
+          style: this.styleOverride ?? e.item.style ?? 'neutral',
           speed: e.item.speed,
           signal: e.abort.signal,
         })
@@ -386,7 +396,7 @@ export class SpeechDirector extends EventEmitter<DirectorEvents> {
           if (e.abort.signal.aborted) throw err
           stream = await this.o.tts.synthesize({
             text: e.text,
-            style: e.item.style ?? 'neutral',
+            style: this.styleOverride ?? e.item.style ?? 'neutral',
             speed: e.item.speed,
             signal: e.abort.signal,
           })

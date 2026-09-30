@@ -281,6 +281,21 @@ describe('SpeechDirector: text rules', () => {
     expect(tts.calls[0]!.req).toMatchObject({ style: 'whisper', speed: 0.9 })
     expect(stage.begun[0]!.args).toMatchObject({ emotion: 'relaxed', subtitle: 'Whisper this.' })
   })
+
+  it('a voice style override speaks everything in that style, and leaves the face to the emotion', async () => {
+    const { d, tts, stage } = setup()
+    tts.auto = true
+    d.setStyleOverride('whisper')
+    const t = d.beginTurn('t')
+    t.enqueue(item('Softly now.', { style: 'happy', emotion: 'happy' }))
+    await tick()
+    expect(tts.calls[0]!.req).toMatchObject({ style: 'whisper' })
+    expect(stage.begun[0]!.args).toMatchObject({ emotion: 'happy' })
+    d.setStyleOverride(null)
+    t.enqueue(item('Loudly again.', { style: 'happy', emotion: 'happy' }))
+    await tick()
+    expect(tts.calls[1]!.req).toMatchObject({ style: 'happy' })
+  })
 })
 
 describe('SpeechDirector: cancellation and supersession', () => {

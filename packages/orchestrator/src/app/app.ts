@@ -904,6 +904,7 @@ export class App {
         this.director.cancelAll(reason)
       },
       holdSpeech: (reason, on) => this.director.hold(reason, on),
+      setVoiceStyle: (style) => this.director.setStyleOverride(style),
       say: (o) => this.sayLine(o),
       whenQuiet: (ms) => this.whenQuiet(ms),
       busy: () => this.busyNow(),

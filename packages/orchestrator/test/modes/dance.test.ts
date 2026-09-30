@@ -157,6 +157,7 @@ async function rig(
     },
     stopSpeech: () => {},
     holdSpeech: (reason, on) => void held.push([reason, on]),
+    setVoiceStyle: () => {},
     say: () => {},
     whenQuiet: async () => {
       if (quiet.wait) await quiet.wait

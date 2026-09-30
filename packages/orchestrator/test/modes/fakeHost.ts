@@ -62,6 +62,8 @@ export interface FakeHost {
   said: SayOptions[]
   told: { text: string; opts: Parameters<ModeHost['tellBrain']>[1] }[]
   held: [string, boolean][]
+  /** Every `setVoiceStyle` call, in order. */
+  voiceStyles: (string | null)[]
   stopped: string[]
   songLines: string[]
   entered: { id: string; opts: unknown }[]
@@ -139,6 +141,7 @@ export async function fakeHost(opts: FakeHostOptions = {}): Promise<FakeHost> {
     said: [],
     told: [],
     held: [],
+    voiceStyles: [],
     stopped: [],
     songLines: [],
     entered: [],
@@ -177,6 +180,7 @@ export async function fakeHost(opts: FakeHostOptions = {}): Promise<FakeHost> {
     },
     stopSpeech: (reason) => void f.stopped.push(reason),
     holdSpeech: (reason, on) => void f.held.push([reason, on]),
+    setVoiceStyle: (style) => void f.voiceStyles.push(style),
     say: (o) => void f.said.push(o),
     whenQuiet: async () => {
       if (f.quiet.wait) await f.quiet.wait

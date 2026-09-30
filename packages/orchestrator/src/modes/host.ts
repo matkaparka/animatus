@@ -56,6 +56,8 @@ export interface ModeHost {
   stopSpeech(reason: string): void
   /** While held, nothing new goes to the stage (dance and song hold the voice). */
   holdSpeech(reason: string, on: boolean): void
+  /** Speak everything in this voice style (`whisper` for sleep) whatever the emotion; null for the usual. The face still follows the emotion. */
+  setVoiceStyle(style: string | null): void
   /** Say a line without the model. */
   say(opts: SayOptions): void
   /** Resolves when nothing is being said, generated or queued; false on timeout. */
