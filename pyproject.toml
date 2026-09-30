@@ -1,0 +1,80 @@
+[project]
+name = "animatus-python"
+version = "0.1.0"
+description = "Python side of Animatus: plugin services (motion, image, singing, games) in two dependency groups."
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+# Two groups that must not share an environment (different numpy/onnx pins, and only one needs torch).
+#
+#   uv sync                                          -> light (default), into .venv
+#   UV_PROJECT_ENVIRONMENT=.venv-audio uv sync --group audio --no-group light
+#
+# GPT-SoVITS is not here: it needs numpy<2, librosa==0.10.2, pydantic<=2.10.6, transformers<=4.50 and
+# gradio<5, which cannot live next to the groups below. It keeps its own environment, installed by the
+# first-run wizard the way upstream documents it, with the path recorded in the config.
+# Forge Neo, Applio and the game MCP servers are external projects and keep their own environments too.
+[dependency-groups]
+# Lightweight services, no torch: image planner service, motion service, game workers.
+light = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.9",
+  "starlette>=0.40",
+  "aiohttp>=3.10",
+  "httpx>=0.27",
+  "numpy>=2.0",
+  "scipy>=1.13",
+  "soundfile>=0.12",
+  "pillow>=10.4",
+  "python-dotenv>=1.0",
+  "pyyaml>=6.0",
+  "google-genai>=1.0",
+  "onnxruntime>=1.19",
+  "huggingface-hub>=0.25",
+  "mcp>=1.20",
+  "openai>=1.60",
+]
+
+# Audio pipeline: f0 extraction, source-separation helpers, ASMR post-processing. Needs torch (CUDA 12.8 build).
+# audio-separator, onnxruntime-gpu and the patched builds the current singing environment uses
+# (diffq_fixed, onnx_weekly) are added when the singing pipeline is ported, after resolving them here.
+audio = [
+  "torch==2.11.*",
+  "torchaudio==2.11.*",
+  "numpy>=2.0",
+  "scipy>=1.13",
+  "soundfile>=0.12",
+  "pillow>=10.4",
+  "praat-parselmouth>=0.4.5",
+  "pyworld>=0.3.5",
+  "matplotlib>=3.9",
+  "librosa>=0.10",
+  "pedalboard>=0.9",
+  "pydub>=0.25",
+  "resampy>=0.4",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.9",
+  "requests>=2.32",
+  "pyyaml>=6.0",
+]
+
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+default-groups = ["light"]
+conflicts = [[{ group = "light" }, { group = "audio" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", group = "audio" }]
+torchaudio = [{ index = "pytorch-cu128", group = "audio" }]

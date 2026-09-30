@@ -1,0 +1,68 @@
+# Animatus configuration (draft: the orchestrator's loader defines the final schema).
+# Copy this directory to ./config and edit. Secrets are referenced as ${secret:name}.
+version: 1
+
+servers:
+  stage_port: 5810      # stage page, stage WebSocket and /asset, bound to 127.0.0.1
+  console_port: 5811    # console UI and API, bound to 127.0.0.1, needs the start-up token
+
+paths:
+  data_dir: ./data
+  # Your own files. The orchestrator serves them to the stage as /asset/<kind>/... and never copies them.
+  models: C:/path/to/vrm-models
+  motions: C:/path/to/motions      # idle/, talk/, tags/, dance/<name>/{motion.vrma, music.*, meta.json}
+  songs: C:/path/to/songs
+  asmr: C:/path/to/asmr
+
+stage:
+  model: my-model.vrm              # relative to paths.models
+  background: { kind: none }
+  lighting: { intensity: 1 }
+  # Browser launcher for the capture window
+  browser:
+    executable: C:/Program Files/Google/Chrome/Application/chrome.exe
+    profile_dir: ./data/animatus-stage-profile   # keep "animatus-stage" in the path: the VRAM probe keys on it
+    window_size: [1920, 1080]
+
+persona: ./personas/example
+
+llm:
+  providers:
+    - id: primary
+      kind: gemini
+      model: your-model-name
+      api_key: ${secret:gemini}
+      proxy: ""                    # e.g. http://127.0.0.1:7890
+    - id: local
+      kind: openai-compatible
+      base_url: http://127.0.0.1:8081/v1
+      model: local-model
+  order: [primary, local]          # tried in this order; falls back when quota runs out
+
+tts:
+  plugin: gptsovits
+  # Emotion to reference audio. Edited in the console; whisper is used by sleep mode.
+  styles: {}
+
+plugins:
+  gptsovits:
+    enabled: true
+    config:
+      root: C:/path/to/GPT-SoVITS
+      python: C:/path/to/GPT-SoVITS/runtime/python.exe
+      api_port: 9880
+  motion:
+    enabled: false
+  forge:
+    enabled: false
+    config:
+      max_long_side: 1024          # multiple of 64, at least 512
+  singing:
+    enabled: false
+
+modes:
+  sleep: { enabled: true }
+  dance: { enabled: true }
+
+speech:
+  sensitive_words_file: ./config/sensitive-words.txt

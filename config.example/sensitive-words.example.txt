@@ -1,0 +1,2 @@
+# Words replaced before text-to-speech. One per line, or comma separated. Empty on purpose:
+# write your own list in config/sensitive-words.txt (git-ignored).

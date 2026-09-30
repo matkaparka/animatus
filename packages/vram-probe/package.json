@@ -1,0 +1,17 @@
+{
+  "name": "@animatus/vram-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Per-process GPU memory recorder for Windows (GPU Process Memory counters), with role attribution, marks and summaries.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "animatus-vram-probe": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "probe": "node src/cli.ts"
+  }
+}
