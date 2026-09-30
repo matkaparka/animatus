@@ -1,0 +1,108 @@
+// @vitest-environment happy-dom
+import { describe, expect, it } from 'vitest'
+import { Backdrop } from '../../src/overlays/backdrop.ts'
+import { Overlays } from '../../src/overlays/overlays.ts'
+
+const setup = () => {
+  const root = document.createElement('div')
+  document.body.appendChild(root)
+  const ov = new Overlays(root)
+  const el = (id: string) => root.querySelector(`[data-overlay="${id}"]`) as HTMLElement
+  return { ov, el, root }
+}
+
+describe('Overlays', () => {
+  it('renders text as text, never as HTML', () => {
+    const { ov, el } = setup()
+    const evil = '<img src=x onerror="window.pwned=1"><b>bold</b>'
+    ov.set({ type: 'overlay.set', id: 'notice', visible: true, text: evil })
+    expect(el('notice').textContent).toBe(evil)
+    expect(el('notice').querySelector('img')).toBeNull()
+    expect(el('notice').querySelector('b')).toBeNull()
+    ov.setSubtitle('utterance', evil)
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true })
+    expect(el('subtitle').querySelector('img')).toBeNull()
+    ov.setLyric(evil)
+    ov.set({ type: 'overlay.set', id: 'lyrics', visible: true })
+    expect(el('lyrics').querySelector('img')).toBeNull()
+  })
+
+  it('hides an overlay that is not visible or has no text', () => {
+    const { ov, el } = setup()
+    ov.set({ type: 'overlay.set', id: 'notice', visible: false, text: 'hello' })
+    expect(el('notice').style.display).toBe('none')
+    ov.set({ type: 'overlay.set', id: 'notice', visible: true })
+    expect(el('notice').style.display).toBe('')
+    expect(el('notice').textContent).toBe('hello')
+    ov.set({ type: 'overlay.set', id: 'notice', visible: true, text: '' })
+    expect(el('notice').style.display).toBe('none')
+  })
+
+  it('the dance credit shows for the dance even when the credit overlay is off, then the static credit returns', () => {
+    const { ov, el } = setup()
+    ov.set({ type: 'overlay.set', id: 'credit', visible: true, text: 'static credit' })
+    expect(el('credit').textContent).toBe('static credit')
+    ov.setActivityCredit('choreography by X')
+    expect(el('credit').textContent).toBe('choreography by X')
+    ov.setActivityCredit(null)
+    expect(el('credit').textContent).toBe('static credit')
+    ov.set({ type: 'overlay.set', id: 'credit', visible: false })
+    ov.setActivityCredit('required credit')
+    expect(el('credit').textContent).toBe('required credit')
+  })
+
+  it('an utterance subtitle wins over a track caption', () => {
+    const { ov, el } = setup()
+    ov.set({ type: 'overlay.set', id: 'subtitle', visible: true })
+    ov.setSubtitle('track', 'from the track')
+    expect(el('subtitle').textContent).toBe('from the track')
+    ov.setSubtitle('utterance', 'a reply')
+    expect(el('subtitle').textContent).toBe('a reply')
+    ov.setSubtitle('utterance', '')
+    expect(el('subtitle').textContent).toBe('from the track')
+  })
+
+  it('the frame overlay needs an image and visibility, and takes its rect from the scene', () => {
+    const { ov, el } = setup()
+    ov.setFrameRect({ left: 5, top: 8, width: 50, height: 68 })
+    expect(el('frame').style.width).toBe('50%')
+    ov.set({ type: 'overlay.set', id: 'frame', visible: true })
+    expect(el('frame').style.display).toBe('none') // no image yet
+    ov.set({ type: 'overlay.set', id: 'frame', visible: true, image: '/asset/draw/a.png' })
+    expect(el('frame').style.display).toBe('')
+    expect((el('frame').querySelector('img') as HTMLImageElement).getAttribute('src')).toBe(
+      '/asset/draw/a.png'
+    )
+  })
+
+  it('reset clears activity text but keeps the snapshot state', () => {
+    const { ov, el } = setup()
+    ov.set({ type: 'overlay.set', id: 'lyrics', visible: true })
+    ov.setLyric('la la')
+    expect(el('lyrics').textContent).toBe('la la')
+    ov.reset()
+    expect(el('lyrics').style.display).toBe('none')
+    ov.setLyric('again')
+    expect(el('lyrics').textContent).toBe('again')
+  })
+})
+
+describe('Backdrop', () => {
+  it('applies colour, image with dim, and the night filter', () => {
+    const root = document.createElement('div')
+    const b = new Backdrop(root)
+    const bg = root.querySelector('.backdrop') as HTMLElement
+    const night = root.querySelector('.backdrop-night') as HTMLElement
+    b.apply({ kind: 'color', color: '#112233' })
+    expect(bg.style.backgroundColor).not.toBe('')
+    b.apply({ kind: 'image', url: '/asset/backgrounds/a.png', dim: 0.4 })
+    expect(bg.style.backgroundImage).toContain('/asset/backgrounds/a.png')
+    expect(bg.style.filter).toContain('brightness(0.6)')
+    b.apply({ kind: 'none' })
+    expect(bg.style.backgroundImage).toBe('')
+    b.setDim(0)
+    expect(night.style.background).toBe('')
+    b.setDim(1)
+    expect(night.style.background).toContain('rgba')
+  })
+})

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Animatus stage</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        user-select: none;
+        -webkit-user-select: none;
+        cursor: none;
+        pointer-events: none;
+      }
+      #backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+      }
+      .backdrop,
+      .backdrop-night {
+        position: absolute;
+        inset: 0;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 1;
+        display: block;
+      }
+      #overlays {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+      }
+      .ov {
+        position: absolute;
+        color: #fff;
+        font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+        text-shadow:
+          0 0 4px #000,
+          0 0 8px #000;
+      }
+      .ov-credit {
+        left: 2vw;
+        bottom: 2vh;
+        font-size: max(14px, 1.4vw);
+        background: rgba(0, 0, 0, 0.45);
+        padding: 0.4em 0.8em;
+        border-radius: 0.4em;
+      }
+      .ov-lyrics {
+        left: 10vw;
+        right: 10vw;
+        bottom: 8vh;
+        text-align: center;
+        font-size: max(20px, 2.6vw);
+        font-weight: 700;
+      }
+      .ov-subtitle {
+        left: 10vw;
+        right: 10vw;
+        bottom: 3vh;
+        text-align: center;
+        font-size: max(16px, 2vw);
+      }
+      .ov-notice {
+        top: 2vh;
+        left: 10vw;
+        right: 10vw;
+        text-align: center;
+        font-size: max(16px, 1.8vw);
+        background: rgba(0, 0, 0, 0.45);
+        padding: 0.4em 0.8em;
+        border-radius: 0.4em;
+      }
+      .ov-frame {
+        border: 0.4vw solid rgba(255, 255, 255, 0.85);
+        border-radius: 0.6vw;
+        background: rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="backdrop"></div>
+    <canvas id="stage"></canvas>
+    <div id="overlays"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

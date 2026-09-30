@@ -12,12 +12,13 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "npm run start -w @animatus/orchestrator --",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write \"packages/**/*.{ts,tsx,json,css,html}\" \"tools/**/*.mjs\"",
     "secret-scan": "node tools/secret-scan/scan.mjs",
-    "probe": "node tools/vram-probe/probe.mjs",
+    "probe": "npm run probe -w @animatus/vram-probe --",
     "prepare": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {
