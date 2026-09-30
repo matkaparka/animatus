@@ -1,0 +1,86 @@
+# Settings of the singing service. Copy this file, edit the copy, and point plugins.singing.config.settings at it.
+# Every key has a default (docs/mode-sing.md lists them); a key that is not known is an error that names it.
+# Relative paths are relative to this file's folder. Changes take effect when the plugin is restarted.
+
+# Where songs come from: `local` (the folder below), `netease` (the API server below), or `auto`
+# (NetEase when ncm.base_url is set, the local folder otherwise).
+source: auto
+
+paths:
+  local_music: C:/path/to/music        # a folder of audio files: "Artist - Title.mp3", with Title.lrc next to it for lyrics
+  ffmpeg: C:/path/to/ffmpeg.exe        # or just: ffmpeg (found on the PATH)
+  applio: C:/path/to/applio            # the Applio folder (the one with core.py)
+  # applio_python: C:/path/to/applio/.venv/Scripts/python.exe   # default: the .venv inside the Applio folder
+  # models: C:/path/to/separation-models                        # default: models/ in the state folder (downloaded on first use)
+
+# Only for source: netease. Needs a NetEase cloud music API server that you run (an "api-enhanced" build).
+# The membership cookie, if you have one, is a secret: put it in the console's key page under `ncm_cookie`.
+ncm:
+  base_url: ""                         # for example http://127.0.0.1:3300
+  min_interval_sec: 3.0                # every request, downloads included, waits this long after the last (across processes)
+  max_new_downloads_per_session: 30
+
+separation:
+  vocal_model: vocals_mel_band_roformer.ckpt
+  split_backing: true                  # lead / backing split: only the lead is converted, the backing stays in the band
+  karaoke_model: mel_band_roformer_karaoke_becruily.ckpt
+  dereverb_model: dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt
+
+voice:
+  f0_median_hz: 0                      # the median pitch of the voice's training material (0: songs are sung at their own pitch)
+  comfort_low_hz: 0                    # the range the voice is comfortable in: a song that lands outside it too often gets a warning
+  comfort_high_hz: 0
+
+rvc:
+  model_pth: C:/path/to/voice.pth
+  index: C:/path/to/voice.index        # optional
+  f0_method: rmvpe
+  index_rate: 0.5
+  protect: 0.33
+  volume_envelope: 1.0
+  embedder: contentvec
+
+transpose:
+  max_abs: 12
+  allowed: [-12, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 12]
+  shift_instrumental: true             # a shift that is not a whole octave is applied to the band too
+  overrides: {}                        # song id: semitones, for a song the automatic choice gets wrong
+
+mix:
+  target_lufs: -18.5                   # the loudness of a whole song; the speaking voice's own level is the natural choice
+  vocal_offset_db: 0.0
+  inst_offset_db: -2.0
+  peak_limit_dbfs: -1.0
+  reverb: { enabled: false, room_size: 0.25, wet_level: 0.12, dry_level: 0.9 }
+  mp3_bitrate: 192k
+  preview_mp3: true
+
+qc:
+  max_duration_sec: 360
+  min_vocal_ratio: 0.03                # under this share of vocal energy a song is instrumental and refused
+
+queue:
+  max_per_user: 1
+  max_len: 5
+  repeat_cooldown_min: 30
+  blacklist_ids: []
+  blacklist_keywords: []
+  restore_within_min: 20               # after a restart only requests newer than this come back
+
+timeouts:                              # every tool is killed, with its children, when its time is up
+  download_sec: 300
+  separate_sec: 1500                   # raise it for the very first song: the models are downloaded then
+  analyze_sec: 300
+  convert_sec: 900
+  mix_sec: 600
+  gpu_lock_wait_sec: 1800
+
+retry:
+  max_attempts: 3                      # a network blip is tried this many times in all ...
+  backoff_sec: [30, 120]               # ... after these pauses
+
+keep_intermediate: false               # keep the separation's intermediate files (about 250 MB a song)
+
+# The reasons viewers are told, by code (defaults and codes: docs/mode-sing.md). Replace any of them:
+# messages:
+#   queue_full: "The queue is full ({max} songs), try again in a while"

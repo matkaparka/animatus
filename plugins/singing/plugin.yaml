@@ -1,0 +1,74 @@
+manifest_version: 1
+id: singing
+title: Singing (song requests)
+description: >-
+  Prepares the songs viewers ask for: finds one (in a folder of your own audio files, or through a NetEase API
+  server you run), separates the vocals, converts the voice with RVC (your own Applio install), mixes, and keeps the
+  result in the songs library the stage plays from. Nothing of the models ships with Animatus.
+version: 0.1.0
+kind: singing
+service: singing
+provides: [singing.queue]
+
+runtime:
+  type: process
+  env: external              # {python} is config.python: an interpreter with PyYAML, numpy, scipy, soundfile and audio-separator
+  command:
+    - "{python}"
+    - "-u"
+    - "-m"
+    - "singing_service"
+    - "--port"
+    - "{port}"
+    - "--songs-dir"
+    - "{config.songs_dir}"   # the songs library: the same folder as paths.songs
+    - "--state-dir"
+    - "{data_dir}/singing"   # the queue, the play log and the locks
+    - "--settings"
+    - "{config.settings}"    # a YAML file with everything else; it may be missing (then every setting has its default)
+  cwd: "{plugin_dir}"
+  port: auto
+  guard: true
+  stop:
+    http: { method: POST, path: /shutdown }
+    grace_ms: 10000          # the service kills the tool it is running before it exits
+
+health:
+  # 200 + ready:true means it can work; a setup that cannot (a missing model file) is 503 with the reason in `detail`.
+  http: { path: /health, method: GET, expect_status: 200 }
+  start_timeout_ms: 60000
+  interval_ms: 5000
+  timeout_ms: 3000
+  fail_threshold: 3
+
+restart:
+  policy: on-failure
+  max_restarts: 3
+  backoff_ms: [2000, 10000, 30000]
+
+resources:
+  gpu: true
+  vram_mb_est: null          # not measured: separation, pitch analysis and conversion run one at a time, each in its own process
+  config_keys: [settings]    # the models and thresholds that decide the cost are in that file, so a change of path is all this can see
+  note: The service itself holds no GPU memory; each step is a process that ends when it is done.
+
+secrets:
+  # Only for a membership account on NetEase, and only used by the NetEase source. Sent in a request header, never logged.
+  - { name: ncm_cookie, env: NCM_COOKIE, required: false }
+
+config_schema:
+  type: object
+  required: [python, songs_dir, settings]
+  properties:
+    python:
+      type: string
+      title: Python interpreter
+      description: The environment that has PyYAML, numpy, scipy, soundfile and audio-separator (pedalboard too, for songs that need their instrumental transposed).
+    songs_dir:
+      type: string
+      title: Songs folder
+      description: Where prepared songs are kept. It must be the same folder as paths.songs, which is what the stage fetches from.
+    settings:
+      type: string
+      title: Settings file
+      description: A YAML file with the source (music folder or NetEase address), the Applio folder, the RVC model, ffmpeg and the tuning (see docs/mode-sing.md). It may not exist yet.
