@@ -20,6 +20,9 @@ from .errors import SingingError, SourceUnavailable
 from .service import OUTCOMES, SingingService
 
 MAX_BODY = 64 * 1024
+#: A refused body that is still being sent is read and dropped up to this much, for at most this long (see `_drain`).
+MAX_DRAIN = 1 << 20
+DRAIN_TIMEOUT_SEC = 2.0
 log = logging.getLogger('singing.api')
 
 
@@ -161,6 +164,8 @@ class _Server(ThreadingHTTPServer):
 def _handler(api: Api) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
+        #: What the caller of a refused request has declared and not yet sent (see `_drain`).
+        _unread = 0
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - the base class's name
             log.debug('%s %s', self.address_string(), format % args)
@@ -178,10 +183,15 @@ def _handler(api: Api) -> type[BaseHTTPRequestHandler]:
                 pass  # the caller went away; whatever was decided stays decided
 
         def _read_body(self) -> dict[str, Any]:
+            self._unread = 0
             length = self.headers.get('Content-Length')
             if not length:
                 return {}
-            if not length.isdigit() or int(length) > MAX_BODY:
+            # isascii(): a header is read as Latin-1, where a superscript two passes isdigit() but int() refuses it
+            if not (length.isascii() and length.isdigit()):
+                raise _bad('Content-Length is not a number')
+            if int(length) > MAX_BODY:
+                self._unread = int(length)
                 raise ApiError(413, 'too_large', f'the body may be at most {MAX_BODY} bytes')
             raw = self.rfile.read(int(length))
             try:
@@ -192,13 +202,33 @@ def _handler(api: Api) -> type[BaseHTTPRequestHandler]:
                 raise _bad('the body must be a JSON object')
             return body
 
+        def _drain(self) -> None:
+            """Reads and drops the body of a refused request that the caller is still sending. Closing a connection that
+            has unread input resets it, and on Windows the reset can destroy the answer before the caller has read it: it
+            saw a broken connection instead of the 413. Bounded in size and in time; a caller that declares more than
+            MAX_DRAIN gets the reset it asked for."""
+            remaining, self._unread = self._unread, 0
+            if not 0 < remaining <= MAX_DRAIN:
+                return
+            try:
+                self.connection.settimeout(DRAIN_TIMEOUT_SEC)
+                while remaining > 0:
+                    chunk = self.rfile.read(min(remaining, 1 << 16))
+                    if not chunk:
+                        return
+                    remaining -= len(chunk)
+            except OSError:
+                return
+
         def _handle(self, method: str) -> None:
             path = self.path.split('?', 1)[0]
             try:
                 body = self._read_body() if method == 'POST' else {}
             except ApiError as error:
                 self.close_connection = True
-                return self._answer(error.status, api._error(error.code, error.message, error.retryable))
+                self._answer(error.status, api._error(error.code, error.message, error.retryable))
+                self._drain()  # after the answer: it is already on its way while the rest is being read
+                return
             status, payload = api.route(method, path, body)
             self._answer(status, payload)
 

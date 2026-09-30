@@ -230,10 +230,11 @@ class Process(Harness):
     def test_pick_transpose_rounds_to_what_is_allowed_and_stops_at_the_limit(self):
         cfg = make_config(self.tmpdir(), voice={'f0_median_hz': 200.0}, transpose={'allowed': [-12, -5, 0, 5, 12], 'max_abs': 12})
         self.assertEqual(pick_transpose(cfg, 'x', 200.0)[:1], (0,))
-        self.assertEqual(pick_transpose(cfg, 'x', 200.0 / 2 ** (3 / 12))[0], 5)  # 3 semitones: 5 is nearer than 0? no: |3-5| < |3-0|
-        self.assertEqual(pick_transpose(cfg, 'x', 200.0 / 2 ** (2 / 12))[0], 0)  # 2: 0 is nearer than 5
-        self.assertEqual(pick_transpose(cfg, 'x', 200.0 * 2 ** (11 / 12))[0], -12)  # 11 down: -12 is nearest
-        self.assertEqual(pick_transpose(cfg, 'x', 200.0 * 4)[0], -12)  # clamped to the limit first
+        # the song is this many semitones below the voice, so it has to go up by that much
+        self.assertEqual(pick_transpose(cfg, 'x', 200.0 / 2 ** (3 / 12))[0], 5)  # 3 up: 5 is two away, 0 is three
+        self.assertEqual(pick_transpose(cfg, 'x', 200.0 / 2 ** (2 / 12))[0], 0)  # 2 up: 0 is two away, 5 is three
+        self.assertEqual(pick_transpose(cfg, 'x', 200.0 * 2 ** (11 / 12))[0], -12)  # 11 down: -12 is the nearest allowed
+        self.assertEqual(pick_transpose(cfg, 'x', 200.0 * 4)[0], -12)  # 24 down: cut to the limit (12) first
 
     def test_the_share_of_notes_out_of_range_is_read_off_the_quantiles(self):
         quantiles = [100.0 + i for i in range(101)]  # 100 .. 200 Hz, evenly

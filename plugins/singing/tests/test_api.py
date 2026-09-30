@@ -196,6 +196,27 @@ class BadInput(ApiCase):
         self.assertEqual((status, payload['error']['code']), (413, 'too_large'))
         self.assertEqual(self.call('GET', '/health')[0], 200)  # and the server is fine
 
+    def test_the_refusal_of_a_large_body_reaches_a_caller_that_is_still_sending(self):
+        # Closing a connection that has unread input resets it, and on Windows the reset can destroy the answer before
+        # the caller reads it: the caller saw a broken connection instead of the 413, in about one run in three.
+        for size in (70 * 1024, 300 * 1024, 900 * 1024) * 8:
+            with self.subTest(size=size):
+                status, payload, _ = self.call('POST', '/request', raw=b'x' * size)
+                self.assertEqual((status, payload['error']['code']), (413, 'too_large'))
+
+    def test_a_body_declared_far_too_large_is_refused_at_once_and_not_waited_for(self):
+        status, payload, _ = self.call('POST', '/request', headers={'Content-Length': str(50 * 1024 * 1024)})
+        self.assertEqual((status, payload['error']['code']), (413, 'too_large'))
+        self.assertEqual(self.call('GET', '/health')[0], 200)
+
+    def test_a_length_that_is_not_a_number_is_a_bad_request_not_a_dropped_connection(self):
+        # '\xb2' (a superscript two) passes str.isdigit() but is not something int() reads
+        for value in ('abc', '-5', '1.5', '\xb2'):
+            with self.subTest(value=value):
+                status, payload, _ = self.call('POST', '/request', headers={'Content-Length': value})
+                self.assertEqual((status, payload['error']['code']), (400, 'bad_request'))
+                self.assertIn('Content-Length', payload['error']['message'])
+
     def test_unknown_paths_and_the_wrong_method_are_404s(self):
         for method, path in (('GET', '/nope'), ('POST', '/nope'), ('GET', '/request'), ('GET', '/claim'), ('POST', '/queue')):
             with self.subTest(method=method, path=path):
