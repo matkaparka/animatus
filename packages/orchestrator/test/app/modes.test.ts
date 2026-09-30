@@ -170,9 +170,8 @@ describe('the dance mode, through the whole program', () => {
     const r = await rig(danceRig())
     const stage = await r.connect({ danceMs: 5000 })
     await until(() => r.app.stage.hub.connected)
-    const views = r.app.modeViews()
-    expect(views.map((v) => v.id)).toEqual(['dance'])
-    expect(views[0]).toMatchObject({ state: 'IDLE' })
+    // every pack in the repo's modes/ folder is listed (the others are switched off in this rig), not only dance
+    expect(r.app.modeViews().find((v) => v.id === 'dance')).toMatchObject({ state: 'IDLE' })
 
     const started = await r.app.modeAction('dance', 'enter', NO_FLAGS)
     expect(started.id).toBe('dance')
