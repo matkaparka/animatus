@@ -304,9 +304,11 @@ Pass criterion (brief section 12): on a clean machine, following the documentati
   lightningcss builds, build only; certifi and tqdm in the Python environment) are listed in
   [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md), and the six source files derived from another project carry its
   notice.
-- **Not done.** The hidden key prompt in a real terminal: the setup was driven through `--stdin`, and the terminal path
-  asks the same questions with the echo switched off, which nobody has typed into. `npm install` with an empty npm
-  cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
+- **The setup in a real terminal.** The clean-clone run drove the setup through `--stdin`; the terminal path was then
+  driven through a Windows pseudo-terminal (ConPTY, from a script that types the answers when each question appears): it
+  ran to the end with exit code 0, ordinary answers echoed as typed, and the API key that was typed appeared nowhere in
+  the terminal output or in the configuration file, and decrypted back from the store.
+- **Not done.** `npm install` with an empty npm cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
   previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A VRM 1 model on the real
   stage (the tests use a stand-in; the run used VRM 0). A voice in another language than Chinese with the real
   GPT-SoVITS: the setting is tested, the sound is not. Another Windows account: the encrypted key store belongs to the
