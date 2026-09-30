@@ -31,10 +31,11 @@ async function main(): Promise<number> {
     console.log(USAGE)
     return 0
   }
-  const file =
-    values.config ??
-    process.env.ANIMATUS_CONFIG ??
-    path.join(repoRoot, 'config', 'animatus.config.yaml')
+  // a relative path is relative to where the person typed the command, not to the workspace npm runs the script in
+  const given = values.config ?? process.env.ANIMATUS_CONFIG
+  const file = given
+    ? path.resolve(process.env.INIT_CWD ?? process.cwd(), given)
+    : path.join(repoRoot, 'config', 'animatus.config.yaml')
 
   let app: App
   try {

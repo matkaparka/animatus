@@ -8,7 +8,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "tsx src/main.ts",
-    "replay": "tsx src/dev/replay.ts"
+    "replay": "tsx src/dev/replay.ts",
+    "doctor": "tsx src/cli/doctor.ts",
+    "setup": "tsx src/cli/setup.ts"
   },
   "dependencies": {
     "@animatus/protocol": "*",
