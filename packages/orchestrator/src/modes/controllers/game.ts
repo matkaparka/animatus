@@ -161,26 +161,27 @@ export function createGameController(host: ModeHost, deps: GameDeps = {}): GameC
 
   /** The first answer, asked again while the agent is slow to come up: it has `start_timeout_sec`. */
   async function firstState(r: Run, signal: AbortSignal): Promise<WorkerState> {
-    const stop = AbortSignal.any([
-      signal,
-      r.abort.signal,
-      AbortSignal.timeout(cfg.start_timeout_sec * 1000),
-    ])
+    const late = new AbortController()
+    const timer = setTimeout(() => late.abort(), cfg.start_timeout_sec * 1000)
+    const stop = AbortSignal.any([signal, r.abort.signal, late.signal])
     let last: unknown
-    for (;;) {
-      try {
-        return await r.client.state()
-      } catch (e) {
-        // a worker that is not the one the operator named will not become it by waiting
-        if (e instanceof WorkerError && e.code === 'wrong_worker')
-          throw new Error(
-            `the game service is not the worker that modes.game.config.name asks for: ${workerWords(e)}`
-          )
-        last = e
+    try {
+      // a start that was given up on before it began asks nothing
+      while (!stop.aborted) {
+        try {
+          return await r.client.state()
+        } catch (e) {
+          // a worker that is not the one the operator named will not become it by waiting
+          if (e instanceof WorkerError && e.code === 'wrong_worker')
+            throw new Error(
+              `the game service is not the worker that modes.game.config.name asks for: ${workerWords(e)}`
+            )
+          last = e
+        }
+        await sleep(START_RETRY_MS, stop)
       }
-      if (stop.aborted) break
-      await sleep(START_RETRY_MS, stop)
-      if (stop.aborted) break
+    } finally {
+      clearTimeout(timer)
     }
     if (signal.aborted || r.abort.signal.aborted) throw new Error('aborted')
     throw new Error(
@@ -655,6 +656,7 @@ export function createGameController(host: ModeHost, deps: GameDeps = {}): GameC
         throw new Error(`the game pack is incomplete: no ${missing.join(', ')}`)
       // a run that is still being put away (its exit was cut short) is finished first
       if (run) await close(run, 'a new start')
+      if (ctx.signal.aborted) throw new Error('aborted') // given up on while it waited: nothing was done, nothing is asked
       const url = host.serviceUrl(SERVICE)
       if (url === null) throw new Error(`the "${SERVICE}" service is not running`)
       const r = newRun(url)
