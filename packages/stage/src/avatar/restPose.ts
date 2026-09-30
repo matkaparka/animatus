@@ -15,16 +15,22 @@ export const REST_POSE = { armDrop: 65, elbowBend: 15 } as const
 const AXIS = { y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) } as const
 
 /**
- * The clip is two keys of the same pose on the normalised bones (the character's left is +X in that space): the left
- * upper arm turns about Z away from +X and down, the right one the other way, and each forearm turns about Y so that the
- * hand comes forward.
+ * The clip is two keys of the same pose on the normalised bones. In a VRM 1 model the character's left is +X in that
+ * space: the left upper arm turns about Z away from +X and down, the right one the other way, and each forearm turns
+ * about Y so that the hand comes forward. The normalised bones of a VRM 0 model sit in a frame turned half way about Y,
+ * so there the x and z parts of each rotation change sign (the same flip the animation loader makes).
  */
 export function restPoseClip(vrm: VRM): THREE.AnimationClip {
   const tracks: THREE.KeyframeTrack[] = []
+  const flip = vrm.meta.metaVersion === '0'
   const pose = (bone: VRMHumanBoneName, axis: keyof typeof AXIS, degrees: number) => {
     const node = vrm.humanoid.getNormalizedBoneNode(bone)
     if (!node) return
     const q = new THREE.Quaternion().setFromAxisAngle(AXIS[axis], THREE.MathUtils.degToRad(degrees))
+    if (flip) {
+      q.x = -q.x
+      q.z = -q.z
+    }
     tracks.push(
       new THREE.QuaternionKeyframeTrack(
         `${node.name}.quaternion`,

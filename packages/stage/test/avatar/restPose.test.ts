@@ -50,6 +50,23 @@ describe('the built-in rest pose', () => {
     expect(at('rightHand').z).toBeGreaterThan(at('rightUpperArm').z + 0.01)
   })
 
+  it('a VRM 0 model, whose normalised bones sit in a frame turned half way about Y, gets the same pose with x and z negated', () => {
+    const values = (metaVersion: '0' | '1') =>
+      restPoseClip(makeFakeVrm({ metaVersion }).vrm).tracks.map((t) => Array.from(t.values))
+    const one = values('1')
+    const zero = values('0')
+    expect(zero).toHaveLength(one.length)
+    one.forEach((v1, i) => {
+      const v0 = zero[i] as number[]
+      for (let k = 0; k < v1.length; k += 4) {
+        expect(v0[k]).toBeCloseTo(-(v1[k] as number), 9)
+        expect(v0[k + 1]).toBeCloseTo(v1[k + 1] as number, 9)
+        expect(v0[k + 2]).toBeCloseTo(-(v1[k + 2] as number), 9)
+        expect(v0[k + 3]).toBeCloseTo(v1[k + 3] as number, 9)
+      }
+    })
+  })
+
   it('a model that lacks a bone still gets a clip, without a track for that bone', () => {
     const fake = makeFakeVrm()
     const original = fake.vrm.humanoid.getNormalizedBoneNode.bind(fake.vrm.humanoid)
