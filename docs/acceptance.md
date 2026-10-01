@@ -350,6 +350,10 @@ Pass criterion (brief section 12): on a clean machine, following the documentati
   (`<temp>/测试 目录/animatus`): install, build, setup, doctor (the encrypted key store read through PowerShell from that
   path included), start with the speech server under its job guard and the Chrome stage window whose profile is in that
   folder, and a chat message from a viewer with a Chinese name, all worked.
+- **A real live room, anonymously.** The opt-in smoke test (`ANIMATUS_TEST_BILI_ROOM=<room> npx vitest run
+  packages/orchestrator/test/sources/bilibili-live.test.ts`, 15 s, read-only) against a public room opened the connection,
+  produced only events of a valid shape and closed cleanly; how many chat messages came in was not recorded. A stream's
+  start and end messages and a logged-in cookie (real names) were not tried.
 - **Not done.** `npm install` with an empty npm cache on a slow network. The stage captured as an OBS browser source (a window capture of the stage window is what the
   previous setup used). A machine with neither Chrome nor Edge (the setup asks for a path). A voice in another language than Chinese with the real
   GPT-SoVITS: the setting is tested, the sound is not. Another Windows account: the encrypted key store belongs to the
