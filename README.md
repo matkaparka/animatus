@@ -84,6 +84,19 @@ node packages/vram-probe/src/cli.ts mark "enter:draw"     # from another termina
 See [`docs/`](docs/) for the stage protocol, the plugin contract and mode packs, and
 [`AGENTS.md`](AGENTS.md) for conventions when working on the code (also for coding agents).
 
+## Origin and credits
+
+Animatus replaces a fork of [AITuberKit](https://github.com/tegnike/aituber-kit), the AI-streamer toolkit by nikechan
+(tegnike), that its author had been running. It is a rewrite, not a patch set: the orchestrator, the stage, the console, the
+plugin system and the modes are new code. What is derived from AITuberKit itself is small and named: the streaming sentence
+segmenter, the tag extractors, their types and two test files, six files in all, each beginning with a header that says so.
+They are used under AITuberKit's Non-Commercial Use License (its authors keep their copyright, and it has a commercial
+license of its own), and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) lists them. The modules the fork's author added to that fork (the live
+motion layer, the motion director, the dance, singing, sleep and drawing features, the chat bridge) were written for it by the
+same author, and their behaviour was ported here. AITuberKit's own README says it is a fork of pixiv's
+[ChatVRM](https://github.com/pixiv/ChatVRM) (MIT), which it thanks.
+
 ## License
 
 [PolyForm Noncommercial License 1.0.0](LICENSE). Source-available, not open source in the OSI sense:
@@ -91,3 +104,5 @@ you may use, modify and share it for non-commercial purposes. Third-party compon
 licenses, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 
 Required Notice: Copyright 2026 matkaparka (https://github.com/matkaparka)
+
+Required Notice: Some files are derived from AITuberKit (https://github.com/tegnike/aituber-kit), copyright of its authors, and are used under its Non-Commercial Use License (licenses/AITuberKit-LICENSE.txt). THIRD_PARTY_NOTICES.md names them, and each begins with a header that says so.

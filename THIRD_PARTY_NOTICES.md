@@ -29,6 +29,12 @@ is written by `npm run license-audit -- --write` (see `tools/license-audit`): ru
 Files that only re-implement behaviour (the stage's look-at smoother, expression controller, VRMA helpers) are written
 from scratch and are not derived work.
 
+No other file contains code taken from AITuberKit. Every source file was compared token by token with the sources of the fork
+this project replaces (on 2026-10-01): besides the six files named below, the only large overlaps are with modules that the fork's
+author added to that fork (the live motion layer, the motion director, the dance and singing modules, a mirror helper), which
+are the author's own work and are ported here by the same author, and a few lines of ordinary boilerplate. The fork itself
+descends from AITuberKit, which says in its README that it is a fork of pixiv's [ChatVRM](https://github.com/pixiv/ChatVRM) (MIT).
+
 ## Assets are not included
 
 No 3D models, motions, dance choreography, music or voice weights are distributed with this
