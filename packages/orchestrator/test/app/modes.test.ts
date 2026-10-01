@@ -464,6 +464,7 @@ describe('what a mode can use of the program', () => {
       '[neutral]More. ',
       '[neutral]More. ',
     ]
+    r.llm.delayMs = 100 // slow enough to be caught in the middle, even when the machine is busy
     const pending = host().tellBrain('say something long')
     await until(() => r.app.brain.processing, 3000, 'the reply to start')
     r.app.brain.cancelActive('test')

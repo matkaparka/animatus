@@ -65,13 +65,16 @@ export class FakeTts implements TtsAdapter {
 export class FakeLlm implements LlmLike {
   readonly requests: LlmRequest[] = []
   reply: (req: LlmRequest) => (string | Error)[] = () => ['[neutral]Okay.']
+  /** How long each piece of a reply takes to arrive; a test that has to act in the middle of a reply makes it longer. */
+  delayMs = 1
   stream(req: LlmRequest): AsyncIterable<LlmDelta> {
     this.requests.push(req)
     const pieces = this.reply(req)
+    const delayMs = this.delayMs
     return (async function* () {
       for (const p of pieces) {
         if (req.signal?.aborted) return
-        await new Promise((r) => setTimeout(r, 1))
+        await new Promise((r) => setTimeout(r, delayMs))
         if (p instanceof Error) throw p
         yield { type: 'text', text: p }
       }
