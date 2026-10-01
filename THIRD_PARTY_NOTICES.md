@@ -1,6 +1,6 @@
 # Third-party notices
 
-Animatus itself is licensed under the PolyForm Noncommercial License 1.0.0 (see `LICENSE`).
+Animatus itself is copyright 2026 matkaparka and licensed under the PolyForm Noncommercial License 1.0.0 (see `LICENSE`).
 Dependencies keep their own licenses. The main ones:
 
 | Component | License | Use |

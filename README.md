@@ -60,6 +60,10 @@ What has not been tried against the real thing is listed in [`docs/acceptance.md
 This repository ships an empty program: **no API keys, no 3D models, no motion or music files, no
 character persona.** You bring your own. `personas/example/` is a generic example only.
 
+The sing mode can look songs up through a NetEase API server that you run yourself, with your own account. The repository
+ships no songs, no vocals and no such server, and what you may do with them is yours to check: read
+[songs and rights](docs/mode-sing.md#songs-and-rights) first.
+
 ## Development
 
 ```bash
@@ -85,3 +89,5 @@ See [`docs/`](docs/) for the stage protocol, the plugin contract and mode packs,
 [PolyForm Noncommercial License 1.0.0](LICENSE). Source-available, not open source in the OSI sense:
 you may use, modify and share it for non-commercial purposes. Third-party components keep their own
 licenses, see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+Required Notice: Copyright 2026 matkaparka (https://github.com/matkaparka)

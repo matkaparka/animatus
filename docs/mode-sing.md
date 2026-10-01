@@ -13,6 +13,18 @@ Two halves, on purpose:
 
 Nothing of the models ships with Animatus: no song, no separation model, no voice model. You bring them.
 
+## Songs and rights
+
+Animatus ships no songs, no vocals and no API server for any music service. The NetEase source talks to an API server that
+you run yourself, with your own account, and it is off until you configure it; the local folder of your own audio files is the
+default source and needs no network.
+
+Whether you may download a song from a streaming service and convert its vocals depends on that service's terms and on the
+law where you are and where you stream. Singing over a copyrighted recording on a public stream may also need licences that
+the platform you stream on, or the rights holders, have to give you. That is yours to check. The program's own limits (one
+queue, a pause between requests, a download budget, a breaker that stops on a risk-control answer) are there to protect your
+account and the service; they do not make any of this permitted.
+
 ```
 chat 点歌 X ─▶ router ─▶ mode.onSongCommand ──POST /request──▶ singing service ──▶ queue
                                   │ answer becomes a line for the model            │ one song at a time:
